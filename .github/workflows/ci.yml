@@ -1,0 +1,52 @@
+name: Test and Docker
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      SMOKE_URL: http://127.0.0.1:3123
+      SMOKE_PASSWORD: ci-only-disposable-test-password
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run typecheck
+      - name: Build production container
+        run: docker build --pull -t bill-hub:ci .
+      - name: Start with a persistent volume
+        run: |
+          node scripts/ci-env.mjs
+          docker volume create bill-hub-ci
+          docker run -d --name bill-hub-ci --init --env-file .env.ci --read-only --tmpfs /tmp --tmpfs /app/.next/cache:uid=1000,gid=1000 --cap-drop ALL --security-opt no-new-privileges --mount source=bill-hub-ci,target=/data -p 127.0.0.1:3123:3000 bill-hub:ci
+      - name: HTTP integration tests
+        run: node scripts/http-smoke.mjs write
+      - name: Restart, preserve data, create consistent backup
+        run: |
+          docker restart bill-hub-ci
+          node scripts/http-smoke.mjs verify
+          docker exec bill-hub-ci node scripts/backup.mjs /data/backups/ci.sqlite
+          docker exec bill-hub-ci node --input-type=module -e "import {DatabaseSync} from 'node:sqlite'; const d=new DatabaseSync('/data/backups/ci.sqlite',{readOnly:true}); if(d.prepare('SELECT count(*) AS n FROM utility_readings').get().n!==1) process.exit(1); d.close();"
+      - name: Container diagnostics
+        if: failure()
+        run: docker logs bill-hub-ci || true
+      - name: Cleanup
+        if: always()
+        run: |
+          docker rm -f bill-hub-ci || true
+          docker volume rm bill-hub-ci || true

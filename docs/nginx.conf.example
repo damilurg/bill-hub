@@ -1,0 +1,36 @@
+# Include from the nginx http context. Replace domain and certificate paths.
+limit_req_zone $binary_remote_addr zone=bill_hub_login:10m rate=6r/m;
+
+server {
+    listen 80;
+    server_name bills.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name bills.example.com;
+    ssl_certificate /etc/letsencrypt/live/bills.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/bills.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 32k;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+
+    location = /api/auth/login {
+        limit_req zone=bill_hub_login burst=8 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+    }
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_read_timeout 60s;
+        proxy_buffering off;
+    }
+}

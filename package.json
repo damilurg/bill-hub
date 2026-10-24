@@ -1,0 +1,38 @@
+{
+  "name": "bill-hub",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/migrate.mjs && next dev",
+    "build": "next build --webpack && node scripts/prepare-standalone.mjs",
+    "start": "node --env-file-if-exists=.env scripts/start.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.ts tests/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node --env-file-if-exists=.env scripts/migrate.mjs",
+    "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
+    "test:smoke": "node scripts/http-smoke.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "drizzle-orm": "0.45.2",
+    "lucide-react": "1.31.0",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "drizzle-kit": "0.31.10",
+    "prettier": "3.6.2",
+    "typescript": "5.9.3"
+  }
+}
