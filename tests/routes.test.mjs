@@ -58,6 +58,35 @@ globalThis.fetch = async (url, options) => {
     if (behavior === 'reject') return Response.json({ message: 'lower reading' }, { status: 409 });
     return Response.json({ consumption: 2, payAmount: 40, tariff: 20 });
   }
+  if (url === 'https://voda.link.kg/send/') return Response.json([1, 'voda-token']);
+  if (url === 'https://voda.link.kg/send/voda-token') {
+    return Response.json({
+      waterMeters: [
+        {
+          HYDID: '1',
+          HYDNUM: 'cold',
+          HG: 'H',
+          POKAZAN: '10',
+          ADDRESS: '',
+          BRANCHID: '',
+          CLIENTID: '',
+          VODPP: '',
+        },
+        {
+          HYDID: '2',
+          HYDNUM: 'hot',
+          HG: 'G',
+          POKAZAN: '2',
+          ADDRESS: '',
+          BRANCHID: '',
+          CLIENTID: '',
+          VODPP: '',
+        },
+      ],
+      ok: true,
+      result: { ID_ROW: [1, 2], insert: [1, 1] },
+    });
+  }
   throw new Error('Unexpected external request blocked by test: ' + url);
 };
 const routes = {
@@ -230,7 +259,7 @@ test('routes: archived period and early-month submission blocked', async () => {
   assert.equal((await send(r)).status, 400);
   assert.equal(posts, 0);
 });
-test('routes: unsupported providers never reach the gas adapter', async () => {
+test('routes: water submissions dispatch to water gateway', async () => {
   await request('accounts', water);
   await request('readings', {
     provider: 'water',
@@ -238,7 +267,9 @@ test('routes: unsupported providers never reach the gas adapter', async () => {
     values: { cold: '11', hot: '3' },
   });
   const r = (await request('state')).data.readings[0];
-  assert.equal((await send(r)).status, 422);
+  const res = await send(r);
+  assert.equal(res.status, 200);
+  assert.equal(res.data.status, 'confirmed');
   assert.equal(posts, 0);
 });
 

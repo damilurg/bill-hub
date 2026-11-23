@@ -11,3 +11,4 @@ backups/
 next-env.d.ts
 coverage/
 npm-debug.log*
+.idea/

@@ -427,14 +427,20 @@ export default function Dashboard({
       setBusy('');
     }
   }
-  async function send() {
-    const gas = active.find((r) => r.provider === 'gas');
-    if (!gas || demo || !checked) return;
-    setBusy('send');
+  async function send(readingToSend?: Reading) {
+    const target = readingToSend || active.find((r) => editable(r));
+    if (!target || demo || !checked) return;
+    setBusy('send-' + target.id);
     try {
-      const result = await api('submit', { id: gas.id, version: gas.created, confirmed: true });
+      const result = await api('submit', {
+        id: target.id,
+        version: target.created,
+        confirmed: true,
+      });
       setNotice(
-        result.status === 'confirmed' ? 'Газпром подтвердил приём показаний.' : result.detail,
+        result.status === 'confirmed'
+          ? `${providers[target.provider].company}: показания успешно приняты.`
+          : result.detail,
       );
     } catch (e) {
       setNotice((e as Error).message);
@@ -446,6 +452,32 @@ export default function Dashboard({
       setChecked(false);
     }
   }
+  async function sendAll() {
+    const targets = active.filter((r) => editable(r));
+    if (!targets.length || demo || !checked) return;
+    setBusy('send-all');
+    const results: string[] = [];
+    for (const target of targets) {
+      try {
+        const result = await api('submit', {
+          id: target.id,
+          version: target.created,
+          confirmed: true,
+        });
+        results.push(
+          `${providers[target.provider].name}: ${result.status === 'confirmed' ? 'Принято' : result.detail}`,
+        );
+      } catch (e) {
+        results.push(`${providers[target.provider].name}: ${(e as Error).message}`);
+      }
+    }
+    setNotice(results.join(' | '));
+    try {
+      await reload();
+    } catch {}
+    setBusy('');
+    setChecked(false);
+  }
   async function copy(r: Reading) {
     try {
       await navigator.clipboard.writeText(manualMessage(r));
@@ -454,7 +486,7 @@ export default function Dashboard({
       setNotice('Не удалось скопировать. Значения доступны в истории.');
     }
   }
-  const gasDraft = active.find((r) => r.provider === 'gas' && editable(r));
+  const editableDrafts = active.filter((r) => editable(r));
   const filtered = readings
     .filter((r) => filter === 'all' || r.provider === filter)
     .sort((a, b) => b.period.localeCompare(a.period) || b.created.localeCompare(a.created));
@@ -1157,66 +1189,83 @@ export default function Dashboard({
                     </strong>
                   </div>
                 ))}
-                {r.provider !== 'gas' ? (
+                {!editable(r) ? (
+                  <p className="field_hint">{r.detail}</p>
+                ) : (
                   <>
                     <p className="field_hint">{providers[r.provider].explanation}</p>
                     <div className="review_links">
+                      <button
+                        className="primary_button"
+                        style={{ fontSize: '0.85rem', padding: '0.35rem 0.75rem' }}
+                        disabled={
+                          !checked ||
+                          demo ||
+                          !liveEnabled ||
+                          Boolean(busy) ||
+                          period !== bishkekPeriod()
+                        }
+                        onClick={() => send(r)}
+                      >
+                        {busy === 'send-' + r.id ? (
+                          <LoaderCircle size={14} className="spin" />
+                        ) : (
+                          <ArrowUpRight size={14} />
+                        )}{' '}
+                        Отправить {providers[r.provider].name}
+                      </button>
                       <button className="text_button" onClick={() => copy(r)}>
                         <Copy size={14} /> Копировать
                       </button>
                       <a href={providers[r.provider].url} target="_blank" rel="noreferrer">
-                        Открыть поставщика <ArrowUpRight size={14} />
+                        Сайт <ArrowUpRight size={14} />
                       </a>
                     </div>
                   </>
-                ) : (
-                  !editable(r) && <p className="field_hint">{r.detail}</p>
                 )}
               </div>
             ))
           )}
-          {gasDraft && (
+          {editableDrafts.length > 0 && (
             <label className="confirm_check">
               <input
                 type="checkbox"
                 checked={checked}
                 onChange={(e) => setChecked(e.target.checked)}
-                disabled={demo || busy === 'send'}
+                disabled={demo || Boolean(busy)}
               />
-              <span>
-                Я проверил лицевой счёт и показания газа. Отправить эти данные поставщику.
-              </span>
+              <span>Я проверил лицевые счета и показания. Отправить эти данные поставщикам.</span>
             </label>
           )}
           <div className="modal_actions">
             <button
               className="secondary_button"
-              disabled={busy === 'send'}
+              disabled={Boolean(busy)}
               onClick={() => setReview(false)}
             >
               Закрыть
             </button>
-            {gasDraft && (
+            {editableDrafts.length > 0 && (
               <button
                 className="primary_button"
                 disabled={
                   !checked || demo || !liveEnabled || Boolean(busy) || period !== bishkekPeriod()
                 }
-                onClick={send}
+                onClick={sendAll}
               >
-                {busy === 'send' ? (
+                {busy === 'send-all' ? (
                   <LoaderCircle size={17} className="spin" />
                 ) : (
                   <ArrowUpRight size={17} />
                 )}{' '}
-                Отправить газ
+                Отправить все ({editableDrafts.length})
               </button>
             )}
           </div>
-          {gasDraft && !liveEnabled && (
+          {editableDrafts.length > 0 && !liveEnabled && (
             <p className="field_hint">Отправка поставщикам выключена владельцем сервера.</p>
           )}
-          {gasDraft && period !== bishkekPeriod() && (
+          {editableDrafts.length > 0 && period !== bishkekPeriod() && (
             <p className="field_hint">Архивные показания сохраняются только для вашего учёта.</p>
           )}
         </Modal>

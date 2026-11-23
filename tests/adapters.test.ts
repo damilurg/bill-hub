@@ -9,7 +9,15 @@ import {
   GAS_ENDPOINT,
   type Fetcher,
 } from '../lib/gas-adapter.ts';
-import { waterPayload, waterReceipt, type WaterMeter } from '../lib/water-adapter.ts';
+import {
+  waterPayload,
+  waterReceipt,
+  sendWater,
+  matchWaterValues,
+  type WaterMeter,
+} from '../lib/water-adapter.ts';
+import { sendHeat, extractCsrf } from '../lib/heat-adapter.ts';
+
 const good = { consumption: 5, payAmount: 100, tariff: 20 };
 function mock(response: () => Promise<Response>) {
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -147,4 +155,84 @@ test('water confirmation requires IDs and flags for every meter', () => {
     { ok: true, result: { ID_ROW: [21, 22] } },
   ])
     assert.equal(waterReceipt(r, 2), 'unknown');
+});
+
+test('matchWaterValues maps by composite key, id or kind', () => {
+  const values = [
+    { meterId: 'cold-meter', kind: 'cold' as const, value: '15' },
+    { meterId: 'hot-meter', kind: 'hot' as const, value: '8' },
+  ];
+  const mapped = matchWaterValues(meters, values);
+  assert.deepEqual(mapped, { '1:cold-1': '15', '2:hot-2': '8' });
+});
+
+test('sendWater handles complete flow, rejection and unknown', async () => {
+  const userVals = [
+    { meterId: '1:cold-1', kind: 'cold' as const, value: '15' },
+    { meterId: '2:hot-2', kind: 'hot' as const, value: '8' },
+  ];
+
+  // 1. Successful flow
+  const goodFetcher: Fetcher = async (url, init) => {
+    if (url === 'https://voda.link.kg/send/') return Response.json([1, 'hash123']);
+    const body = JSON.parse(String(init?.body || '{}'));
+    if (body.mode === 'loadForm') {
+      return Response.json({
+        waterMeters: meters,
+        glob_update_pok: '2026-11-01',
+      });
+    }
+    return Response.json({ ok: true, result: { ID_ROW: [101, 102], insert: [1, 1] } });
+  };
+  const res = await sendWater('000001', userVals, goodFetcher);
+  assert.equal(res.status, 'confirmed');
+
+  // 2. Account not found
+  const notFoundFetcher: Fetcher = async () => Response.json([0, '000001']);
+  const rej = await sendWater('000001', userVals, notFoundFetcher);
+  assert.equal(rej.status, 'rejected');
+
+  // 3. Network failure
+  const failFetcher: Fetcher = async () => {
+    throw new Error('network down');
+  };
+  const blocked = await sendWater('000001', userVals, failFetcher);
+  assert.equal(blocked.status, 'blocked');
+});
+
+test('sendHeat handles csrf, login, meter post and errors', async () => {
+  const csrf = extractCsrf('<input type="hidden" name="csrf_test_name" value="token123">');
+  assert.equal(csrf, 'token123');
+
+  // 1. Decimal rejected
+  const dec = await sendHeat('1234567-1', [{ meterId: 'm1', value: '10.5' }]);
+  assert.equal(dec.status, 'rejected');
+
+  // 2. Account not found
+  const notFoundFetcher: Fetcher = async (url, init) => {
+    if (init?.method === 'GET') {
+      return new Response('<input type="hidden" name="csrf_test_name" value="tok">');
+    }
+    return new Response('<div data-lk-error="notfound">Лицевой счёт не найден</div>');
+  };
+  const rej = await sendHeat('9999999-9', [{ meterId: 'm1', value: '15' }], notFoundFetcher);
+  assert.equal(rej.status, 'rejected');
+
+  // 3. Successful flow
+  const okFetcher: Fetcher = async (url, init) => {
+    if (init?.method === 'GET') {
+      return new Response('<input type="hidden" name="csrf_test_name" value="tok">', {
+        headers: { 'set-cookie': 'ci_session=sess123' },
+      });
+    }
+    const body = String(init?.body || '');
+    if (body.includes('account=')) {
+      return new Response(
+        '<input type="hidden" name="csrf_test_name" value="tok2"><input name="meter[1]" data-lk-meter data-prev="10">',
+      );
+    }
+    return new Response('<div>Показания приняты</div>');
+  };
+  const ok = await sendHeat('1234567-1', [{ meterId: 'm1', value: '15' }], okFetcher);
+  assert.equal(ok.status, 'confirmed');
 });
