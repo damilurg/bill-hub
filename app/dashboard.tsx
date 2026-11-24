@@ -264,6 +264,217 @@ function AccountModal({
     </Modal>
   );
 }
+
+const METER_SPECS: Record<ProviderId, string> = {
+  water: 'СВК-15 · КЛАСС B · Qn 1.5 m³/h',
+  gas: 'G-4 · ТАХИОМЕТРИЧЕСКИЙ · PN 0.05',
+  heat: 'ГВС-15 · ДО 90°C · ДУ 15',
+  electricity: 'АСКУЭ · ОДНОФАЗНЫЙ · 220V 50Hz',
+};
+
+function MeterDial({
+  provider,
+  value,
+  previous,
+  unit,
+  disabled,
+  meterId,
+  meterLabel,
+  account,
+  onChange,
+}: {
+  provider: ProviderId;
+  value: string;
+  previous: string;
+  unit: string;
+  disabled: boolean;
+  meterId: string;
+  meterLabel: string;
+  account: string;
+  onChange: (val: string) => void;
+}) {
+  const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const cleanVal = (value ?? '').trim();
+  const sepIdx = cleanVal.search(/[,.]/);
+  const hasSep = sepIdx !== -1;
+  const rawInt = hasSep ? cleanVal.slice(0, sepIdx) : cleanVal;
+  const rawFrac = hasSep ? cleanVal.slice(sepIdx + 1) : '';
+
+  const defaultIntLen = provider === 'gas' ? 7 : provider === 'electricity' ? 6 : 5;
+  const intLen = Math.max(defaultIntLen, rawInt.length);
+  const paddedInt = rawInt.padStart(intLen, '0');
+  const leadingZerosCount = rawInt.length > 0 ? intLen - rawInt.length : intLen;
+
+  const numCur = Number(cleanVal.replace(',', '.'));
+  const numPrev = Number(previous.replace(',', '.'));
+  const hasDiff =
+    cleanVal !== '' && previous !== '' && Number.isFinite(numCur) && Number.isFinite(numPrev);
+  const diff = hasDiff ? numCur - numPrev : null;
+  const isFlowing = focused || (hasDiff && diff !== null && diff > 0);
+
+  return (
+    <div
+      className={
+        'meter_faceplate ' +
+        provider +
+        (focused ? ' is_focused' : '') +
+        (disabled ? ' is_locked' : '')
+      }
+      onClick={() => inputRef.current?.focus()}
+    >
+      <span className="meter_screw tl" aria-hidden="true" />
+      <span className="meter_screw tr" aria-hidden="true" />
+      <span className="meter_screw bl" aria-hidden="true" />
+      <span className="meter_screw br" aria-hidden="true" />
+
+      <div className="meter_faceplate_header">
+        <span className="meter_spec_tag">{METER_SPECS[provider]}</span>
+        <span className="meter_serial_tag">№ ••••{account.slice(-4)}</span>
+      </div>
+
+      <div className="meter_drum_window">
+        <div className="meter_acrylic_glare" aria-hidden="true" />
+
+        <div
+          className={'meter_impeller_port' + (isFlowing ? ' active_flow' : '')}
+          title={isFlowing ? 'Расход зафиксирован (крыльчатка вращается)' : 'Крыльчатка расхода'}
+        >
+          <span className="meter_impeller_jewel" />
+          <svg
+            className={'meter_impeller' + (isFlowing ? ' spinning' : '')}
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M12 2l1.9 4.3 4.3-1.9-1.9 4.3 4.3 1.9-4.3 1.9 1.9 4.3-4.3-1.9-1.9 4.3-1.9-4.3-4.3 1.9 1.9-4.3-4.3-1.9 4.3-1.9-1.9-4.3 4.3 1.9z" />
+          </svg>
+        </div>
+
+        <div className="meter_drums_rack">
+          {paddedInt.split('').map((digit, idx) => {
+            const isDimmed = idx < leadingZerosCount;
+            const isCursor =
+              focused &&
+              idx ===
+                (rawInt.length === 0
+                  ? intLen - 1
+                  : Math.min(intLen - 1, leadingZerosCount + rawInt.length - 1));
+            return (
+              <div
+                key={'int_' + idx}
+                className={
+                  'drum_wheel' + (isDimmed ? ' dimmed' : '') + (isCursor ? ' cursor_target' : '')
+                }
+              >
+                <span>{digit}</span>
+              </div>
+            );
+          })}
+
+          {hasSep && (
+            <>
+              <div className="drum_separator">,</div>
+              {rawFrac.split('').map((digit, idx) => (
+                <div key={'frac_' + idx} className="drum_wheel red">
+                  <span>{digit}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        <div className="meter_unit_plaque">
+          {disabled ? (
+            <span className="meter_seal_badge" title="Счётчик зафиксирован / опломбирован">
+              <LockKeyhole size={11} /> ПЛОМБА
+            </span>
+          ) : (
+            <span className="meter_unit_text">{unit}</span>
+          )}
+        </div>
+
+        <input
+          ref={inputRef}
+          id={'read_' + meterId}
+          className="meter_hidden_input"
+          aria-label={meterLabel}
+          inputMode={provider === 'gas' ? 'numeric' : 'decimal'}
+          value={value}
+          disabled={disabled}
+          autoComplete="off"
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </div>
+
+      <div className="meter_faceplate_footer">
+        <span className="meter_dial_model">{meterLabel}</span>
+        {hasDiff && diff !== null ? (
+          <span
+            className={
+              'meter_delta_pill ' + (diff > 0 ? 'positive' : diff === 0 ? 'zero' : 'negative')
+            }
+          >
+            Расход: {diff > 0 ? '+' : ''}
+            {diff.toLocaleString('ru', { maximumFractionDigits: 3 })} {unit}
+          </span>
+        ) : (
+          <span className="meter_delta_pill idle">
+            было: {previous !== '' ? previous : '—'} {previous !== '' ? unit : ''}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyMeterDial({ provider, unit }: { provider: ProviderId; unit: string }) {
+  const defaultIntLen = provider === 'gas' ? 7 : provider === 'electricity' ? 6 : 5;
+  return (
+    <div className={'meter_faceplate ' + provider + ' is_empty'}>
+      <span className="meter_screw tl" aria-hidden="true" />
+      <span className="meter_screw tr" aria-hidden="true" />
+      <span className="meter_screw bl" aria-hidden="true" />
+      <span className="meter_screw br" aria-hidden="true" />
+
+      <div className="meter_faceplate_header">
+        <span className="meter_spec_tag">{METER_SPECS[provider]}</span>
+        <span className="meter_serial_tag">СЧЁТ НЕ ПОДКЛЮЧЁН</span>
+      </div>
+
+      <div className="meter_drum_window">
+        <div className="meter_acrylic_glare" aria-hidden="true" />
+        <div className="meter_impeller_port">
+          <span className="meter_impeller_jewel dim" />
+          <svg className="meter_impeller inactive" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2l1.9 4.3 4.3-1.9-1.9 4.3 4.3 1.9-4.3 1.9 1.9 4.3-4.3-1.9-1.9 4.3-1.9-4.3-4.3 1.9 1.9-4.3-4.3-1.9 4.3-1.9-1.9-4.3 4.3 1.9z" />
+          </svg>
+        </div>
+
+        <div className="meter_drums_rack">
+          {Array.from({ length: defaultIntLen }).map((_, idx) => (
+            <div key={idx} className="drum_wheel dimmed">
+              <span>0</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="meter_unit_plaque">
+          <span className="meter_unit_text">{unit}</span>
+        </div>
+      </div>
+
+      <div className="meter_faceplate_footer">
+        <span className="meter_dial_model">Гнездо прибора учёта</span>
+        <span className="meter_delta_pill idle">Не установлен</span>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard({
   authenticated,
   liveEnabled,
@@ -767,41 +978,23 @@ export default function Dashboard({
                                 Лицевой счёт <span>••••{a.account.slice(-4)}</span>
                               </div>
                               {a.meters.map((m) => (
-                                <div className="reading_field" key={m.id}>
-                                  <label htmlFor={'read_' + m.id}>
-                                    {a.meters.length > 1 ? m.label : 'Текущее показание'}
-                                    <span>было {m.previous !== '' ? m.previous : '—'}</span>
-                                  </label>
-                                  <div className={'input_unit ' + (locked ? 'locked' : '')}>
-                                    <input
-                                      id={'read_' + m.id}
-                                      aria-label={meta.name + ' · ' + m.label}
-                                      inputMode={p === 'gas' ? 'numeric' : 'decimal'}
-                                      placeholder="Введите значение"
-                                      value={values[p]?.[m.id] ?? ''}
-                                      disabled={locked}
-                                      onChange={(e) =>
-                                        setValues((v) => ({
-                                          ...v,
-                                          [p]: { ...v[p], [m.id]: e.target.value },
-                                        }))
-                                      }
-                                    />
-                                    <span>{meta.unit}</span>
-                                  </div>
-                                  {values[p]?.[m.id] &&
-                                    m.previous !== '' &&
-                                    Number.isFinite(Number(values[p][m.id].replace(',', '.'))) && (
-                                      <small className="consumption">
-                                        Расход:{' '}
-                                        {(
-                                          Number(values[p][m.id].replace(',', '.')) -
-                                          Number(m.previous)
-                                        ).toLocaleString('ru', { maximumFractionDigits: 3 })}{' '}
-                                        {meta.unit}
-                                      </small>
-                                    )}
-                                </div>
+                                <MeterDial
+                                  key={m.id}
+                                  provider={p}
+                                  value={values[p]?.[m.id] ?? ''}
+                                  previous={m.previous}
+                                  unit={meta.unit}
+                                  disabled={locked}
+                                  meterId={m.id}
+                                  meterLabel={a.meters.length > 1 ? m.label : 'Текущее показание'}
+                                  account={a.account}
+                                  onChange={(val) =>
+                                    setValues((v) => ({
+                                      ...v,
+                                      [p]: { ...v[p], [m.id]: val },
+                                    }))
+                                  }
+                                />
                               ))}
                               {errors[p] && (
                                 <p className="error" role="alert">
@@ -849,15 +1042,13 @@ export default function Dashboard({
                                     — <small>{meta.unit}</small>
                                   </strong>
                                 </div>
-                                <div className="empty_input">
-                                  Текущее показание<span>{meta.unit}</span>
+                                <EmptyMeterDial provider={p} unit={meta.unit} />
+                                <div className="meter_card_footer">
+                                  <span>Счёт не добавлен</span>
+                                  <button className="text_button" onClick={() => setEditing(p)}>
+                                    <Plus size={16} /> Добавить
+                                  </button>
                                 </div>
-                              </div>
-                              <div className="meter_card_footer">
-                                <span>Счёт не добавлен</span>
-                                <button className="text_button" onClick={() => setEditing(p)}>
-                                  <Plus size={16} /> Добавить
-                                </button>
                               </div>
                             </>
                           )}

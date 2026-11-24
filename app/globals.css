@@ -599,19 +599,447 @@ h1 {
   font-size: 10px;
 }
 .reading_field {
-  margin: 13px 0;
+  margin: 15px 0;
 }
-.reading_field > label {
+.reading_field_header {
   display: flex;
   justify-content: space-between;
-  color: #7d8c90;
-  font-size: 10px;
+  align-items: baseline;
   margin-bottom: 7px;
   gap: 8px;
 }
-.reading_field > label span {
-  color: #9ca9ac;
+.reading_field_header label {
+  color: #55676c;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
 }
+.previous_badge {
+  font-size: 10px;
+  color: #7c8d91;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f1f4f5;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid #e3e8ea;
+}
+
+/* ========================================================
+   SKEUOMORPHIC PRECISION METER COUNTER (Циферблат счётчика)
+   ======================================================== */
+.meter_faceplate {
+  position: relative;
+  background: linear-gradient(155deg, #1f272a 0%, #13191b 60%, #0d1214 100%);
+  border: 1.5px solid #2d393d;
+  border-radius: 13px;
+  padding: 10px 12px 9px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 14px rgba(10, 16, 18, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  cursor: text;
+  transition:
+    border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  margin: 10px 0;
+}
+
+.meter_faceplate:hover {
+  border-color: #3d4d53;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9),
+    0 4px 16px rgba(10, 16, 18, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* Corner screws */
+.meter_screw {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #506167 0%, #1e2528 100%);
+  box-shadow:
+    inset 0 0.5px 0.5px rgba(255, 255, 255, 0.4),
+    0 1px 1px rgba(0, 0, 0, 0.6);
+  position: absolute;
+}
+.meter_screw::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 0.5px;
+  right: 0.5px;
+  height: 1px;
+  background: #0d1113;
+}
+.meter_screw.tl {
+  top: 6px;
+  left: 6px;
+}
+.meter_screw.tr {
+  top: 6px;
+  right: 6px;
+}
+.meter_screw.bl {
+  bottom: 6px;
+  left: 6px;
+}
+.meter_screw.br {
+  bottom: 6px;
+  right: 6px;
+}
+
+/* Faceplate Technical Header */
+.meter_faceplate_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 8px;
+  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', monospace;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: #55676c;
+  margin-bottom: 7px;
+  padding: 0 4px;
+}
+.meter_serial_tag {
+  color: #798e94;
+  letter-spacing: 1px;
+}
+
+/* The Drum Housing Window */
+.meter_drum_window {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #070a0b;
+  border-radius: 8px;
+  padding: 4px 6px;
+  border: 1.5px solid #232d30;
+  box-shadow:
+    inset 0 4px 10px rgba(0, 0, 0, 0.95),
+    inset 0 -2px 6px rgba(0, 0, 0, 0.8),
+    0 1px 0 rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Acrylic glare over lens */
+.meter_acrylic_glare {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 48%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.16) 0%,
+    rgba(255, 255, 255, 0.04) 65%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  pointer-events: none;
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 5;
+}
+
+/* Impeller Porthole & Bearing */
+.meter_impeller_port {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1a2225 0%, #090d0e 100%);
+  border: 1.5px solid #283438;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.08);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 6;
+}
+.meter_impeller_jewel {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 4px #f87171;
+  z-index: 2;
+}
+.meter_impeller_jewel.dim {
+  background: #475569;
+  box-shadow: none;
+}
+.meter_impeller {
+  width: 17px;
+  height: 17px;
+  color: #4b5d63;
+  transition: color 0.25s ease;
+  z-index: 1;
+}
+.meter_faceplate.water .meter_impeller {
+  color: #38bdf8;
+}
+.meter_faceplate.gas .meter_impeller {
+  color: #fbbf24;
+}
+.meter_faceplate.heat .meter_impeller {
+  color: #fb923c;
+}
+.meter_faceplate.electricity .meter_impeller {
+  color: #c084fc;
+}
+
+.meter_impeller.spinning {
+  animation: meter_spin 2.2s linear infinite;
+}
+
+/* Roller Drums Rack */
+.meter_drums_rack {
+  display: flex;
+  align-items: center;
+  gap: 2.5px;
+  flex: 1;
+  min-width: 0;
+  z-index: 2;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 1px 0;
+}
+.meter_drums_rack::-webkit-scrollbar {
+  display: none;
+}
+
+/* Individual Drum Wheel */
+.drum_wheel {
+  width: 24px;
+  height: 38px;
+  background: linear-gradient(
+    180deg,
+    #080c0d 0%,
+    #13191c 18%,
+    #212b2f 45%,
+    #2c393f 50%,
+    #212b2f 55%,
+    #13191c 82%,
+    #080c0d 100%
+  );
+  border-radius: 3.5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: ui-monospace, 'SF Mono', 'Roboto Mono', 'Cascadia Code', monospace;
+  font-size: 19px;
+  font-weight: 800;
+  color: #ffffff;
+  text-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.95),
+    0 -1px 0 rgba(0, 0, 0, 0.7);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.85),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.85),
+    inset 1px 0 1px rgba(255, 255, 255, 0.08),
+    inset -1px 0 1px rgba(0, 0, 0, 0.7);
+  position: relative;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+.drum_wheel::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.drum_wheel.dimmed {
+  color: #38464b;
+  text-shadow: none;
+}
+.drum_wheel.red {
+  background: linear-gradient(
+    180deg,
+    #450a0a 0%,
+    #7f1d1d 18%,
+    #991b1b 45%,
+    #b91c1c 50%,
+    #991b1b 55%,
+    #7f1d1d 82%,
+    #450a0a 100%
+  );
+  color: #ffffff;
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.7),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.7),
+    inset 1px 0 1px rgba(255, 255, 255, 0.2),
+    inset -1px 0 1px rgba(0, 0, 0, 0.6);
+}
+.drum_wheel.cursor_target {
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.85),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.85),
+    0 0 0 1px var(--active_glow, rgba(56, 189, 248, 0.6));
+}
+.drum_separator {
+  color: #8fa1a6;
+  font-size: 19px;
+  font-weight: 800;
+  padding: 0 1px;
+  font-family: ui-monospace, 'SF Mono', monospace;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Stamped Nameplate / Plaque */
+.meter_unit_plaque {
+  padding: 6px 9px;
+  border-radius: 5px;
+  background: linear-gradient(180deg, #1b2326 0%, #111719 100%);
+  border: 1px solid #2d393d;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  z-index: 6;
+}
+.meter_unit_text {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #8ea1a7;
+  text-transform: uppercase;
+  font-family:
+    Inter,
+    -apple-system,
+    sans-serif;
+}
+.meter_seal_badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  color: #4ade80;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: uppercase;
+}
+
+/* Hidden Overlay Input */
+.meter_hidden_input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+  z-index: 10;
+  font-size: 16px;
+}
+
+/* Faceplate Footer */
+.meter_faceplate_footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 7px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.meter_dial_model {
+  color: #63767c;
+  font-size: 10px;
+  font-weight: 500;
+}
+.meter_delta_pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1.5px 7px;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 10px;
+}
+.meter_delta_pill.positive {
+  background: #14532d;
+  color: #86efac;
+  border: 1px solid #166534;
+}
+.meter_delta_pill.zero {
+  background: #1e293b;
+  color: #94a3b8;
+  border: 1px solid #334155;
+}
+.meter_delta_pill.negative {
+  background: #7f1d1d;
+  color: #fca5a5;
+  border: 1px solid #991b1b;
+}
+.meter_delta_pill.idle {
+  background: #172124;
+  color: #6d8288;
+  border: 1px solid #233035;
+}
+
+/* Provider Focus Highlights */
+.meter_faceplate.water.is_focused {
+  --active_glow: #38bdf8;
+  border-color: #38bdf8;
+  box-shadow:
+    0 0 0 3px rgba(56, 189, 248, 0.28),
+    0 4px 16px rgba(10, 16, 18, 0.25);
+}
+.meter_faceplate.gas.is_focused {
+  --active_glow: #fbbf24;
+  border-color: #fbbf24;
+  box-shadow:
+    0 0 0 3px rgba(251, 191, 36, 0.28),
+    0 4px 16px rgba(10, 16, 18, 0.25);
+}
+.meter_faceplate.heat.is_focused {
+  --active_glow: #fb923c;
+  border-color: #fb923c;
+  box-shadow:
+    0 0 0 3px rgba(251, 146, 60, 0.28),
+    0 4px 16px rgba(10, 16, 18, 0.25);
+}
+.meter_faceplate.electricity.is_focused {
+  --active_glow: #c084fc;
+  border-color: #c084fc;
+  box-shadow:
+    0 0 0 3px rgba(192, 132, 252, 0.28),
+    0 4px 16px rgba(10, 16, 18, 0.25);
+}
+
+/* Locked state */
+.meter_faceplate.is_locked {
+  cursor: default;
+  opacity: 0.92;
+}
+.meter_faceplate.is_locked .meter_hidden_input {
+  cursor: not-allowed;
+}
+
+/* Empty faceplate state */
+.meter_faceplate.is_empty {
+  opacity: 0.75;
+  cursor: default;
+}
+
+/* Backward compatibility for input_unit */
 .input_unit {
   position: relative;
   display: flex;
