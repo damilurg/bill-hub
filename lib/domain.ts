@@ -213,6 +213,10 @@ export type Receipt = {
   items: ReceiptItem[];
   fileName: string;
   fileData: string;
+  paymentMethod?: string;
+  transactionId?: string;
+  paidFileName?: string;
+  paidFileData?: string;
   notes: string;
   created?: string;
   updated?: string;
@@ -354,14 +358,11 @@ export const MYDOM_DEFAULT_ITEMS: Array<{
   tariff?: string;
   volume?: string;
 }> = [
-  { name: 'Содержание дома / ТСЖ', unit: 'м²', tariff: '25.00', volume: '65' },
-  { name: 'Обслуживание лифта', unit: 'мес.', tariff: '200.00', volume: '1' },
-  { name: 'Вывоз ТБО (Тазалык)', unit: 'чел.', tariff: '45.00', volume: '3' },
-  { name: 'Холодное водоснабжение и стоки', unit: 'м³', tariff: '15.40', volume: '14' },
-  { name: 'Горячее водоснабжение и отопление', unit: 'м³', tariff: '89.50', volume: '6' },
-  { name: 'Электроэнергия (НЭСК)', unit: 'кВт·ч', tariff: '1.37', volume: '160' },
-  { name: 'Природный газ (Газпром)', unit: 'м³', tariff: '20.15', volume: '22' },
-  { name: 'Домофон и видеонаблюдение', unit: 'мес.', tariff: '80.00', volume: '1' },
+  { name: 'МП «Бишкектеплосеть» (Отопление и ГВС)', unit: 'мес.', tariff: '632.00', volume: '1' },
+  { name: 'МП «Тазалык» (Вывоз ТБО)', unit: 'чел.', tariff: '41.00', volume: '2' },
+  { name: 'ПЭУ «Бишкекводоканал» (Холодная вода и стоки)', unit: 'м³', tariff: '0.00', volume: '0' },
+  { name: 'ОсОО «Газпром Кыргызстан» (Природный газ)', unit: 'м³', tariff: '0.00', volume: '0' },
+  { name: 'Содержание дома и ТСЖ / лифт', unit: 'м²', tariff: '0.00', volume: '34.6' },
   { name: 'Интернет Homeline (партнёр Мой дом)', unit: 'мес.', tariff: '850.00', volume: '1' },
 ];
 
@@ -395,10 +396,14 @@ export function validateReceipt(input: unknown): Receipt {
   const paidAmount = normalizeMoney(r.paidAmount);
   let status = String(r.status || 'unpaid');
   if (!['unpaid', 'paid', 'partial'].includes(status)) status = 'unpaid';
-  if (Number(paidAmount) >= Number(amount) && Number(amount) > 0) {
-    status = 'paid';
-  } else if (Number(paidAmount) > 0 && Number(paidAmount) < Number(amount)) {
-    status = 'partial';
+  if (Number(amount) > 0) {
+    if (Number(paidAmount) === 0) {
+      status = 'unpaid';
+    } else if (Number(paidAmount) >= Number(amount)) {
+      status = 'paid';
+    } else if (Number(paidAmount) > 0 && Number(paidAmount) < Number(amount)) {
+      status = 'partial';
+    }
   }
   const dueDate = String(r.dueDate || '')
     .trim()
@@ -410,6 +415,16 @@ export function validateReceipt(input: unknown): Receipt {
     .trim()
     .slice(0, 120);
   const fileData = typeof r.fileData === 'string' ? r.fileData : '';
+  const paymentMethod = String(r.paymentMethod || '')
+    .trim()
+    .slice(0, 100);
+  const transactionId = String(r.transactionId || '')
+    .trim()
+    .slice(0, 100);
+  const paidFileName = String(r.paidFileName || '')
+    .trim()
+    .slice(0, 120);
+  const paidFileData = typeof r.paidFileData === 'string' ? r.paidFileData : '';
   const notes = String(r.notes || '')
     .trim()
     .slice(0, 500);
@@ -445,6 +460,10 @@ export function validateReceipt(input: unknown): Receipt {
     items,
     fileName,
     fileData,
+    paymentMethod,
+    transactionId,
+    paidFileName,
+    paidFileData,
     notes,
     created: typeof r.created === 'string' ? r.created : undefined,
     updated: typeof r.updated === 'string' ? r.updated : undefined,

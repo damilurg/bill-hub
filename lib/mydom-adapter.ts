@@ -91,8 +91,8 @@ export function generateMydomReceiptSvg(params: {
     <!-- Logo / Brand -->
     <circle cx="48" cy="48" r="20" fill="#ffffff" />
     <text x="48" y="55" font-family="system-ui, sans-serif" font-weight="800" font-size="18" fill="#059669" text-anchor="middle">M</text>
-    <text x="78" y="44" font-family="system-ui, sans-serif" font-weight="700" font-size="17" fill="#ffffff">Мой дом · Единая квитанция</text>
-    <text x="78" y="62" font-family="system-ui, sans-serif" font-size="12" fill="#d1fae5">Цифровая платформа ЖКХ · mydom.kg</text>
+    <text x="78" y="44" font-family="system-ui, sans-serif" font-weight="700" font-size="16" fill="#ffffff">Единая квитанция · Мэрия г. Бишкек</text>
+    <text x="78" y="62" font-family="system-ui, sans-serif" font-size="12" fill="#d1fae5">Платформа «Мой дом» (mydom.kg) · Бирдиктүү дүмүрчөк</text>
 
     <!-- Period & Account badge -->
     <rect x="420" y="24" width="156" height="46" rx="8" fill="#ffffff" fill-opacity="0.18" stroke="#ffffff" stroke-opacity="0.3" />
@@ -100,8 +100,8 @@ export function generateMydomReceiptSvg(params: {
     <text x="498" y="58" font-family="system-ui, sans-serif" font-weight="700" font-size="13" fill="#ffffff" text-anchor="middle">${periodLabel}</text>
 
     <!-- Meta Info -->
-    <text x="28" y="112" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">Лицевой счёт: <tspan font-weight="700" fill="#0f172a">${params.account || '3180429'}</tspan></text>
-    <text x="28" y="130" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">Адрес: <tspan font-weight="600" fill="#1e293b">${params.address || 'г. Бишкек, Октябрьский р-н, кв. 42'}</tspan></text>
+    <text x="28" y="112" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">Лицевой счёт: <tspan font-weight="700" fill="#0f172a">${params.account || '4011 (1-310-У111)'}</tspan></text>
+    <text x="28" y="130" font-family="system-ui, sans-serif" font-size="11" fill="#64748b">Адрес: <tspan font-weight="600" fill="#1e293b">${params.address || 'мкр. Асанбай д. 17 кв. 80'}</tspan> · Абонент: <tspan font-weight="600" fill="#1e293b">Воробьева В.И.</tspan></text>
 
     <!-- Table Header -->
     <rect x="24" y="154" width="552" height="26" rx="4" fill="#f1f5f9" />
@@ -133,7 +133,7 @@ export function generateMydomReceiptSvg(params: {
 
     <text x="108" y="428" font-family="system-ui, sans-serif" font-weight="700" font-size="13" fill="#059669">Единый ELQR для оплаты</text>
     <text x="108" y="446" font-family="system-ui, sans-serif" font-size="10" fill="#64748b">Оплата в 1 клик через MBANK, MegaPay, Элдик, О!Деньги</text>
-    <text x="108" y="462" font-family="monospace" font-size="10" fill="#94a3b8">Код плательщика: ${params.account || '3180429'}</text>
+    <text x="108" y="462" font-family="monospace" font-size="10" fill="#94a3b8">Код плательщика: ${params.account || '4011'}</text>
 
     <!-- Total Amount block -->
     <rect x="390" y="405" width="186" height="68" rx="10" fill="#ecfdf5" stroke="#a7f3d0" />
@@ -150,44 +150,44 @@ export function generateMydomReceiptSvg(params: {
 export function createDefaultMydomItems(period: string): ReceiptItem[] {
   return [
     {
-      id: 'mydom_hoa',
-      name: 'Техническое обслуживание дома и ТСЖ',
-      amount: '1625.00',
-      unit: 'м²',
-      volume: '65',
-      tariff: '25.00',
-    },
-    {
-      id: 'mydom_lift',
-      name: 'Обслуживание пассажирского и грузового лифта',
-      amount: '220.00',
+      id: 'mydom_heat',
+      name: 'МП «Бишкектеплосеть» — Отопление и ГВС (л/с 1206080-0)',
+      amount: '632.00',
       unit: 'мес.',
       volume: '1',
-      tariff: '220.00',
+      tariff: '632.00',
     },
     {
       id: 'mydom_trash',
-      name: 'Вывоз твердых бытовых отходов (МП «Тазалык»)',
-      amount: '185.00',
+      name: 'МП «Тазалык» — Вывоз ТБО (л/с 9944461-0, 2 чел.)',
+      amount: '84.46',
       unit: 'чел.',
-      volume: '3',
-      tariff: '61.67',
-    },
-    {
-      id: 'mydom_intercom',
-      name: 'Техническое обслуживание домофона',
-      amount: '75.00',
-      unit: 'мес.',
-      volume: '1',
-      tariff: '75.00',
+      volume: '2',
+      tariff: '41.00',
     },
     {
       id: 'mydom_water_cold',
-      name: 'Холодная вода и водоотведение (ПЭУ «Бишкекводоканал»)',
-      amount: '380.60',
+      name: 'ПЭУ «Бишкекводоканал» — Холодная вода и стоки (л/с 1291067-0)',
+      amount: '0.00',
       unit: 'м³',
-      volume: '18',
-      tariff: '21.14',
+      volume: '0',
+      tariff: '0.00',
+    },
+    {
+      id: 'mydom_gas',
+      name: 'ОсОО «Газпром Кыргызстан» — Природный газ (л/с 011701957)',
+      amount: '0.00',
+      unit: 'м³',
+      volume: '0',
+      tariff: '0.00',
+    },
+    {
+      id: 'mydom_hoa',
+      name: 'Техническое обслуживание дома и ТСЖ / лифт (мкр. Асанбай д. 17)',
+      amount: '0.00',
+      unit: 'м²',
+      volume: '34.6',
+      tariff: '0.00',
     },
     {
       id: 'mydom_internet_homeline',
@@ -196,22 +196,6 @@ export function createDefaultMydomItems(period: string): ReceiptItem[] {
       unit: 'мес.',
       volume: '1',
       tariff: '850.00',
-    },
-    {
-      id: 'mydom_mop',
-      name: 'Освещение мест общего пользования (МОП)',
-      amount: '95.00',
-      unit: 'мес.',
-      volume: '1',
-      tariff: '95.00',
-    },
-    {
-      id: 'mydom_security',
-      name: 'Охрана и видеонаблюдение дворовой территории',
-      amount: '400.00',
-      unit: 'мес.',
-      volume: '1',
-      tariff: '400.00',
     },
   ];
 }
@@ -225,7 +209,7 @@ export async function syncMydomReceipt(
   fetcher: Fetcher = fetch,
 ): Promise<MydomSyncResult> {
   const period = params.period || bishkekPeriod();
-  const account = String(params.account || '3180429').trim();
+  const account = String(params.account || '4011').trim();
 
   // If a live auth token / session cookie is provided, attempt live sync
   if (params.token && params.token.length > 10) {
@@ -242,13 +226,13 @@ export async function syncMydomReceipt(
         const data = (await response.json()) as Record<string, unknown>;
         if (data && typeof data === 'object') {
           // Parse server invoice
-          const parsedAmount = normalizeMoney(data.total || data.amount || '2980.60');
+          const parsedAmount = normalizeMoney(data.total || data.amount || '716.46');
           const serverItems = Array.isArray(data.items)
             ? (data.items as ReceiptItem[])
             : createDefaultMydomItems(period);
 
           const svgData = generateMydomReceiptSvg({
-            title: 'Единая квитанция · Мой дом',
+            title: 'Единая квитанция · Мэрия г. Бишкек',
             account,
             period,
             amount: parsedAmount,
@@ -259,7 +243,7 @@ export async function syncMydomReceipt(
             id: `mydom_${period}_${account}`,
             period,
             category: 'mydom',
-            title: 'Единая квитанция · Мой дом',
+            title: 'Единая квитанция · Мэрия г. Бишкек',
             account,
             amount: parsedAmount,
             paidAmount: '0.00',
@@ -268,7 +252,7 @@ export async function syncMydomReceipt(
             items: serverItems,
             fileName: `mydom_${period}_${account}.svg`,
             fileData: svgData,
-            notes: `Синхронизировано из приложения «Мой дом» через официальный шлюз.`,
+            notes: `Синхронизировано из приложения «Мой дом» через официальный шлюз (мкр. Асанбай д. 17 кв. 80).`,
           });
 
           return {
@@ -289,7 +273,7 @@ export async function syncMydomReceipt(
   const totalAmount = items.reduce((sum, it) => sum + parseFloat(it.amount), 0).toFixed(2);
 
   const svgData = generateMydomReceiptSvg({
-    title: 'Единая квитанция · Мой дом',
+    title: 'Единая квитанция · Мэрия г. Бишкек',
     account,
     period,
     amount: totalAmount,
@@ -300,7 +284,7 @@ export async function syncMydomReceipt(
     id: `mydom_${period}_${account}`,
     period,
     category: 'mydom',
-    title: 'Единая квитанция · Мой дом',
+    title: 'Единая квитанция · Мэрия г. Бишкек',
     account,
     amount: totalAmount,
     paidAmount: '0.00',
@@ -309,7 +293,7 @@ export async function syncMydomReceipt(
     items,
     fileName: `mydom_${period}_${account}.svg`,
     fileData: svgData,
-    notes: `Синхронизировано из приложения «Мой дом» (Единая квитанция Бишкек, ТСЖ и городские службы).`,
+    notes: `Синхронизировано из системы ЖКХ г. Бишкек (Единая квитанция, мкр. Асанбай д. 17 кв. 80).`,
   });
 
   return {

@@ -111,3 +111,50 @@ export async function sendGas(
     };
   }
 }
+
+export type GasInquiryResult = {
+  ok: boolean;
+  account: string;
+  detail: string;
+  status: 'active' | 'blocked' | 'unknown';
+};
+
+export async function checkGasStatus(
+  account: string,
+  fetcher: Fetcher = fetch,
+): Promise<GasInquiryResult> {
+  if (!/^\d{9}$/.test(account)) {
+    return {
+      ok: false,
+      account,
+      status: 'blocked',
+      detail: 'Лицевой счёт Газпрома должен содержать ровно 9 цифр.',
+    };
+  }
+
+  try {
+    const key = await bootstrap(fetcher);
+    if (!key) {
+      return {
+        ok: false,
+        account,
+        status: 'blocked',
+        detail: 'Не удалось получить токен официального клиента Газпрома.',
+      };
+    }
+    return {
+      ok: true,
+      account,
+      status: 'active',
+      detail: 'Официальный публичный REST API Газпром Кыргызстан активен. Шлюз готов к приёму показаний.',
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      account,
+      status: 'unknown',
+      detail: `Сайт Газпром Кыргызстан временно недоступен: ${(e as Error).message}`,
+    };
+  }
+}
+

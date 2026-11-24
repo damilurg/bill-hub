@@ -3377,3 +3377,482 @@ h1 {
     grid-template-columns: 1fr;
   }
 }
+
+/* Receipt Card Sum & Details */
+.receipt_card_sum {
+  margin-bottom: 8px;
+}
+
+.receipt_card_sum .sum_caption {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #7b8e85;
+  font-weight: 700;
+  margin-bottom: 2px;
+}
+
+.receipt_card_sum.paid .sum_caption {
+  color: #059669;
+}
+
+.receipt_card_sum.unpaid .sum_caption {
+  color: #d97706;
+}
+
+.receipt_card_sum.partial .sum_caption {
+  color: #2563eb;
+}
+
+.sum_val_line {
+  font-size: 26px;
+  font-weight: 800;
+  color: #12211c;
+  letter-spacing: -0.6px;
+  line-height: 1.1;
+}
+
+.receipt_card_sum.paid .sum_val_line strong {
+  color: #059669;
+}
+
+.receipt_card_sum.unpaid .sum_val_line strong {
+  color: #12211c;
+}
+
+.sum_val_line span {
+  font-size: 15px;
+  font-weight: 550;
+  color: #73877d;
+}
+
+.partial_detail {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+.is_paid_date {
+  color: #059669 !important;
+  font-weight: 600;
+}
+
+/* Status Warning Note inside Form */
+.status_warning_note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #92400e;
+  margin-bottom: 12px;
+}
+
+/* Receipt View Modal Payment Card */
+.receipt_payment_card {
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  border: 1px solid transparent;
+}
+
+.receipt_payment_card.paid {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+.receipt_payment_card.unpaid {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.receipt_payment_card.partial {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.payment_card_content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.payment_card_icon.success {
+  color: #16a34a;
+  flex-shrink: 0;
+}
+
+.payment_card_icon.warning {
+  color: #d97706;
+  flex-shrink: 0;
+}
+
+.payment_card_icon.partial {
+  color: #2563eb;
+  flex-shrink: 0;
+}
+
+.payment_card_text {
+  flex: 1;
+}
+
+.payment_card_text strong {
+  display: block;
+  font-size: 13px;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+
+.payment_card_text p {
+  font-size: 12px;
+  color: #475569;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Payment Confirmation Modal */
+.payment_modal_content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment_receipt_summary {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.summary_row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+}
+
+.summary_label {
+  color: #64748b;
+}
+
+.summary_amount {
+  font-size: 16px;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.payment_warning_banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fff7ed;
+  border: 1.5px solid #fed7aa;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.payment_warning_banner .warning_icon {
+  color: #ea580c;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.payment_warning_banner strong {
+  display: block;
+  font-size: 13px;
+  color: #9a3412;
+  margin-bottom: 3px;
+}
+
+.payment_warning_banner p {
+  font-size: 12px;
+  color: #7c2d12;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.confirm_checkbox_label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #1e293b;
+  user-select: none;
+}
+
+.confirm_checkbox_label input[type='checkbox'] {
+  margin-top: 3px;
+  cursor: pointer;
+  accent-color: #059669;
+}
+
+.confirm_paid_button {
+  background: #059669;
+  border-color: #059669;
+}
+
+.confirm_paid_button:hover:not(:disabled) {
+  background: #047857;
+}
+
+.confirm_paid_button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Paid management in modal */
+.status_banner_paid {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #ecfdf5;
+  border: 1.5px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 16px;
+}
+
+.status_banner_paid .green_icon {
+  color: #059669;
+  flex-shrink: 0;
+}
+
+.status_banner_paid strong {
+  display: block;
+  font-size: 14px;
+  color: #065f46;
+  margin-bottom: 3px;
+}
+
+.status_banner_paid p {
+  font-size: 13px;
+  color: #047857;
+  margin: 0;
+}
+
+.payment_revoke_section {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.revoke_hint {
+  font-size: 12px;
+  color: #991b1b;
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.danger_button {
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+  background: #ffffff !important;
+}
+
+.danger_button:hover:not(:disabled) {
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  border-color: #dc2626 !important;
+}
+
+/* Document & Download Center */
+.receipt_doc_hub {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.receipt_doc_hub_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.receipt_doc_hub_title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.receipt_doc_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.receipt_doc_btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #0f172a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  font-size: 12.5px;
+}
+
+.receipt_doc_btn:hover {
+  border-color: #059669;
+  background: #f0fdf4;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+}
+
+.receipt_doc_btn.primary_doc {
+  background: #059669;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+.receipt_doc_btn.primary_doc:hover {
+  background: #047857;
+  border-color: #047857;
+}
+
+.receipt_doc_btn.stamp_doc {
+  border-color: #16a34a;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.receipt_doc_btn.stamp_doc:hover {
+  background: #dcfce7;
+  border-color: #15803d;
+}
+
+.receipt_doc_btn_text {
+  display: flex;
+  flex-direction: column;
+}
+
+.receipt_doc_btn_text strong {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.receipt_doc_btn_text small {
+  font-size: 10.5px;
+  opacity: 0.8;
+}
+
+/* Payment Presets */
+.payment_presets_label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.payment_presets_row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.preset_pill_btn {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset_pill_btn:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+.preset_pill_btn.active {
+  background: #059669;
+  border-color: #059669;
+  color: #ffffff;
+}
+
+/* Channels Inquiry Modal / Box */
+.channel_card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.channel_card_top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.channel_card_title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.channel_status_badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.channel_status_badge.active {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.channel_status_badge.blocked {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.meter_chip_list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.meter_chip {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11.5px;
+  display: flex;
+  justify-content: space-between;
+}
+

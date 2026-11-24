@@ -35,6 +35,11 @@ import {
   Building2,
   RefreshCw,
   Wifi,
+  CreditCard,
+  ShieldAlert,
+  AlertTriangle,
+  RotateCcw,
+  Printer,
 } from 'lucide-react';
 import {
   PROVIDERS,
@@ -57,6 +62,10 @@ import {
   type InternetProviderInfo,
   validateReceipt,
 } from '@/lib/domain';
+import {
+  generateReceiptSvg,
+  generatePrintableReceiptHtml,
+} from '@/lib/receipt-generator';
 const icons = { water: Droplets, heat: Waves, gas: Flame, electricity: Zap };
 const statusLabels: Record<string, string> = {
   draft: 'Черновик',
@@ -341,15 +350,16 @@ function ReceiptModal({
     }));
     setItems(templateItems);
     setCategory('mydom');
-    setTitle('Единая квитанция · Мой дом');
+    setTitle('Единая квитанция · Мэрия г. Бишкек');
+    if (!account) setAccount('4011 (1-310-У111)');
     recalculateTotal(templateItems);
   }
 
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      setError('Файл квитанции не должен превышать 2 МБ.');
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Файл квитанции не должен превышать 5 МБ.');
       return;
     }
     setError('');
@@ -359,6 +369,14 @@ function ReceiptModal({
       setFileData(typeof reader.result === 'string' ? reader.result : '');
     };
     reader.readAsDataURL(file);
+
+    // If uploading the Bishkek municipal receipt, prefill metadata
+    if (file.name.includes('Квитанция') || file.name.includes('mydom')) {
+      if (!account) setAccount('4011 (1-310-У111)');
+      if (category === 'mydom') {
+        setTitle('Единая квитанция · Мэрия г. Бишкек');
+      }
+    }
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -371,6 +389,12 @@ function ReceiptModal({
         (items.length
           ? items.reduce((s, it) => s + (Number(it.amount) || 0), 0).toFixed(2)
           : '0.00');
+      let finalPaidAmount = paidAmount;
+      if (status === 'unpaid') {
+        finalPaidAmount = '0.00';
+      } else if (status === 'paid' && (!finalPaidAmount || Number(finalPaidAmount) === 0)) {
+        finalPaidAmount = calculatedAmount;
+      }
       const payload = validateReceipt({
         id: existing?.id,
         period,
@@ -378,10 +402,15 @@ function ReceiptModal({
         title,
         account,
         amount: calculatedAmount,
-        paidAmount,
+        paidAmount: finalPaidAmount,
         status,
         dueDate,
-        paidDate: status === 'paid' && !paidDate ? new Date().toISOString().slice(0, 10) : paidDate,
+        paidDate:
+          status === 'paid' && !paidDate
+            ? new Date().toISOString().slice(0, 10)
+            : status === 'unpaid'
+              ? ''
+              : paidDate,
         items,
         fileName,
         fileData,
@@ -520,6 +549,9 @@ function ReceiptModal({
                 setStatus(newStatus);
                 if (newStatus === 'paid' && (!paidAmount || paidAmount === '0.00')) {
                   setPaidAmount(amount);
+                } else if (newStatus === 'unpaid') {
+                  setPaidAmount('0.00');
+                  setPaidDate('');
                 }
               }}
             >
@@ -529,6 +561,15 @@ function ReceiptModal({
             </select>
           </div>
         </div>
+
+        {status === 'paid' && (
+          <div className="status_warning_note">
+            <ShieldAlert size={15} />
+            <span>
+              Указывайте статус «Оплачено» только если платёж уже фактически списан в банке.
+            </span>
+          </div>
+        )}
 
         <div className="form_row_grid">
           <div>
@@ -691,15 +732,50 @@ function ReceiptViewModal({
   receipt,
   onEdit,
   onDelete,
+  onManagePayment,
   onClose,
 }: {
   receipt: Receipt;
   onEdit: () => void;
   onDelete: () => Promise<void>;
+  onManagePayment: () => void;
   onClose: () => void;
 }) {
   const [deleting, setDeleting] = useState(false);
   const cat = receiptCategories[receipt.category] || receiptCategories.other;
+  const isPaid = receipt.status === 'paid';
+  const hasPdf = receipt.fileData && receipt.fileData.startsWith('data:application/pdf');
+
+  function downloadDoc(mode: 'bill' | 'paid') {
+    if (mode === 'bill' && hasPdf) {
+      const link = document.createElement('a');
+      link.href = receipt.fileData;
+      link.download =
+        receipt.fileName || `Schet_na_oplatu_${receipt.period}_${receipt.account || '4011'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+    const svg = generateReceiptSvg({ receipt, mode });
+    const link = document.createElement('a');
+    link.href = svg;
+    const prefix = mode === 'paid' ? 'Oplacheno' : 'Schet_na_oplatu';
+    link.download = `${prefix}_${receipt.period}_${receipt.account || '4011'}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function printDoc(mode: 'bill' | 'paid') {
+    const html = generatePrintableReceiptHtml({ receipt, mode });
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+    }
+  }
 
   return (
     <Modal title={receipt.title} onClose={onClose}>
@@ -713,7 +789,7 @@ function ReceiptViewModal({
           </span>
           <span className={'receipt_status_pill ' + receipt.status}>
             {receipt.status === 'paid'
-              ? 'Оплачено'
+              ? '✓ Оплачено'
               : receipt.status === 'partial'
                 ? 'Частично'
                 : 'Ожидает оплаты'}
@@ -727,11 +803,127 @@ function ReceiptViewModal({
           </div>
           <div className="receipt_kpi_card">
             <small>Оплачено</small>
-            <strong className="green_text">{receipt.paidAmount} сом</strong>
+            <strong className={receipt.status === 'paid' ? 'green_text' : ''}>
+              {receipt.paidAmount} сом
+            </strong>
           </div>
           <div className="receipt_kpi_card">
             <small>Лицевой счёт</small>
             <strong>{receipt.account || '—'}</strong>
+          </div>
+        </div>
+
+        <div className={'receipt_payment_card ' + receipt.status}>
+          {receipt.status === 'paid' ? (
+            <div className="payment_card_content">
+              <div className="payment_card_icon success">
+                <CheckCircle2 size={20} />
+              </div>
+              <div className="payment_card_text">
+                <strong>Квитанция полностью оплачена</strong>
+                <p>
+                  Фактически оплачено <strong>{receipt.paidAmount} сом</strong>
+                  {receipt.paidDate ? ` · Дата: ${receipt.paidDate}` : ''}
+                  {receipt.paymentMethod ? ` · ${receipt.paymentMethod}` : ''}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="secondary_button small_btn"
+                onClick={onManagePayment}
+              >
+                Снять отметку / Изменить
+              </button>
+            </div>
+          ) : receipt.status === 'partial' ? (
+            <div className="payment_card_content">
+              <div className="payment_card_icon partial">
+                <Info size={20} />
+              </div>
+              <div className="payment_card_text">
+                <strong>Частичная оплата квитанции</strong>
+                <p>
+                  Оплачено: <strong>{receipt.paidAmount} сом</strong>. Остаток долга:{' '}
+                  <strong>
+                    {(Number(receipt.amount) - Number(receipt.paidAmount)).toFixed(2)} сом
+                  </strong>
+                  .
+                </p>
+              </div>
+              <button
+                type="button"
+                className="primary_button small_btn"
+                onClick={onManagePayment}
+              >
+                <CreditCard size={14} /> Доплатить / Изменить...
+              </button>
+            </div>
+          ) : (
+            <div className="payment_card_content">
+              <div className="payment_card_icon warning">
+                <AlertTriangle size={20} />
+              </div>
+              <div className="payment_card_text">
+                <strong>Квитанция НЕ оплачена</strong>
+                <p>
+                  К оплате: <strong>{receipt.amount} сом</strong>
+                  {receipt.dueDate ? ` · Срок оплаты: до ${receipt.dueDate}` : ''}. Не
+                  допускайте просрочек во избежание начисления пени.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="primary_button small_btn"
+                onClick={onManagePayment}
+              >
+                <CreditCard size={14} /> Отметить оплату...
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Document & Download Center */}
+        <div className="receipt_doc_hub">
+          <div className="receipt_doc_hub_header">
+            <span className="receipt_doc_hub_title">
+              <Download size={16} /> Центр документов и скачивания
+            </span>
+            <button
+              type="button"
+              className="secondary_button small_btn"
+              onClick={() => printDoc(isPaid ? 'paid' : 'bill')}
+              title="Открыть чистовую печатную форму с фискальными реквизитами"
+            >
+              <Printer size={14} /> Распечатать / В PDF
+            </button>
+          </div>
+
+          <div className="receipt_doc_grid">
+            <button
+              type="button"
+              className={'receipt_doc_btn ' + (!isPaid ? 'primary_doc' : '')}
+              onClick={() => downloadDoc('bill')}
+              title="Скачать входящий счёт на оплату (оригинальный PDF или SVG с QR-кодом)"
+            >
+              <FileText size={20} />
+              <div className="receipt_doc_btn_text">
+                <strong>Скачать счёт на оплату</strong>
+                <small>{hasPdf ? 'Оригинальный PDF документ' : 'Квитанция с ELQR кодом'}</small>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className={'receipt_doc_btn ' + (isPaid ? 'stamp_doc' : '')}
+              onClick={() => downloadDoc('paid')}
+              title="Скачать официальную квитанцию с фискальным штампом «ОПЛАЧЕНО · ТӨЛӨНДҮ»"
+            >
+              <CheckCircle2 size={20} />
+              <div className="receipt_doc_btn_text">
+                <strong>Скачать квитанцию об оплате</strong>
+                <small>Фискальный чек со штампом «ОПЛАЧЕНО»</small>
+              </div>
+            </button>
           </div>
         </div>
 
@@ -754,7 +946,7 @@ function ReceiptViewModal({
                 download={receipt.fileName || 'receipt.pdf'}
                 className="secondary_button small_btn"
               >
-                <Download size={14} /> Скачать
+                <Download size={14} /> Скачать оригинал
               </a>
             </div>
             {receipt.fileData.startsWith('data:image/') ? (
@@ -839,6 +1031,507 @@ function ReceiptViewModal({
               Закрыть
             </button>
           </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function PaymentConfirmModal({
+  receipt,
+  onSave,
+  onClose,
+}: {
+  receipt: Receipt;
+  onSave: (updated: Receipt) => Promise<void>;
+  onClose: () => void;
+}) {
+  const isCurrentlyPaid = receipt.status === 'paid';
+  const remainingDue = Math.max(
+    0,
+    Number(receipt.amount) - (Number(receipt.paidAmount) || 0),
+  ).toFixed(2);
+
+  const [paidAmount, setPaidAmount] = useState(
+    isCurrentlyPaid ? receipt.paidAmount : remainingDue !== '0.00' ? remainingDue : receipt.amount,
+  );
+  const [paidDate, setPaidDate] = useState(
+    receipt.paidDate || new Date().toISOString().slice(0, 10),
+  );
+  const [paymentMethod, setPaymentMethod] = useState(receipt.paymentMethod || 'MBANK');
+  const defaultTxn =
+    receipt.transactionId ||
+    `TXN-${receipt.account || '4011'}-${(receipt.period || '2026-11').replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+  const [transactionId, setTransactionId] = useState(receipt.transactionId || defaultTxn);
+  const [confirmed, setConfirmed] = useState(false);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const BANK_PRESETS = [
+    'MBANK (ОАО КБ Кыргызстан)',
+    'MegaPay',
+    'Элдик Банк',
+    'О!Деньги',
+    'Optima Bank',
+    'DemirBank',
+    'Касса / Наличные',
+  ];
+
+  function downloadDoc(mode: 'bill' | 'paid') {
+    if (mode === 'bill' && receipt.fileData && receipt.fileData.startsWith('data:application/pdf')) {
+      const link = document.createElement('a');
+      link.href = receipt.fileData;
+      link.download =
+        receipt.fileName || `Schet_na_oplatu_${receipt.period}_${receipt.account || '4011'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+    const svg = generateReceiptSvg({
+      receipt,
+      mode,
+      paymentMethod,
+      transactionId,
+    });
+    const link = document.createElement('a');
+    link.href = svg;
+    const prefix = mode === 'paid' ? 'Oplacheno' : 'Schet_na_oplatu';
+    link.download = `${prefix}_${receipt.period}_${receipt.account || '4011'}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function printDoc(mode: 'bill' | 'paid') {
+    const html = generatePrintableReceiptHtml({
+      receipt,
+      mode,
+      paymentMethod,
+      transactionId,
+    });
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+    }
+  }
+
+  async function handleMarkPaid(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    const numPaid = Number(paidAmount);
+    if (!Number.isFinite(numPaid) || numPaid <= 0) {
+      setError('Укажите корректную сумму фактической оплаты.');
+      return;
+    }
+    if (!confirmed) {
+      setError('Подтвердите чекбоксом, что платёж действительно проведён в банке.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const isFull = numPaid >= Number(receipt.amount);
+      const chosenMethod = paymentMethod.trim() || 'MBANK (ОАО КБ Кыргызстан) / ELQR';
+      const chosenTxn = transactionId.trim() || defaultTxn;
+      const noteAppend = `Оплачено ${numPaid.toFixed(2)} сом через ${chosenMethod} (${paidDate}). Чек: ${chosenTxn}.`;
+      const combinedNotes = receipt.notes
+        ? receipt.notes.includes(noteAppend)
+          ? receipt.notes
+          : `${receipt.notes}\n${noteAppend}`
+        : noteAppend;
+
+      const updated = validateReceipt({
+        ...receipt,
+        status: isFull ? 'paid' : 'partial',
+        paidAmount: numPaid.toFixed(2),
+        paidDate: paidDate || new Date().toISOString().slice(0, 10),
+        paymentMethod: chosenMethod,
+        transactionId: chosenTxn,
+        notes: combinedNotes,
+      });
+
+      await onSave(updated);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRevokePayment() {
+    if (
+      !confirm(
+        `Вернуть квитанцию «${receipt.title}» в статус «Ожидает оплаты»?\nСумма задолженности снова составит ${receipt.amount} сом.`,
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const updated = validateReceipt({
+        ...receipt,
+        status: 'unpaid',
+        paidAmount: '0.00',
+        paidDate: '',
+        paymentMethod: '',
+        transactionId: '',
+      });
+      await onSave(updated);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={isCurrentlyPaid ? 'Статус оплаты квитанции' : 'Подтверждение фактической оплаты'}
+      onClose={onClose}
+    >
+      <div className="payment_modal_content">
+        <div className="payment_receipt_summary">
+          <div className="summary_row">
+            <span className="summary_label">Квитанция:</span>
+            <strong>{receipt.title}</strong>
+          </div>
+          {receipt.account && (
+            <div className="summary_row">
+              <span className="summary_label">Лицевой счёт:</span>
+              <span>{receipt.account}</span>
+            </div>
+          )}
+          <div className="summary_row">
+            <span className="summary_label">Начислено по квитанции:</span>
+            <strong className="summary_amount">{receipt.amount} сом</strong>
+          </div>
+          {receipt.dueDate && (
+            <div className="summary_row">
+              <span className="summary_label">Срок оплаты:</span>
+              <span>до {receipt.dueDate}</span>
+            </div>
+          )}
+        </div>
+
+        {isCurrentlyPaid ? (
+          <div className="payment_current_paid_box">
+            <div className="status_banner_paid">
+              <CheckCircle2 size={24} className="green_icon" />
+              <div>
+                <strong>Квитанция отмечена как ОПЛАЧЕННАЯ</strong>
+                <p>
+                  Фактически оплачено: <strong>{receipt.paidAmount} сом</strong>
+                  {receipt.paidDate ? ` (дата: ${receipt.paidDate})` : ''}
+                  {receipt.paymentMethod ? ` · ${receipt.paymentMethod}` : ''}.
+                </p>
+                {receipt.transactionId && (
+                  <p style={{ marginTop: '4px', fontSize: '11.5px', color: '#166534' }}>
+                    Номер чека / транзакции: <strong>{receipt.transactionId}</strong>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Document Download Buttons for Paid Receipt */}
+            <div className="receipt_doc_hub" style={{ marginTop: '12px', marginBottom: '16px' }}>
+              <span className="receipt_doc_hub_title" style={{ marginBottom: '10px' }}>
+                <Download size={15} /> Получить документы:
+              </span>
+              <div className="receipt_doc_grid">
+                <button
+                  type="button"
+                  className="receipt_doc_btn stamp_doc"
+                  onClick={() => downloadDoc('paid')}
+                  title="Скачать квитанцию с фискальной печатью ОПЛАЧЕНО"
+                >
+                  <CheckCircle2 size={18} />
+                  <div className="receipt_doc_btn_text">
+                    <strong>Скачать оплаченный чек</strong>
+                    <small>С гербовым штампом «ОПЛАЧЕНО»</small>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className="receipt_doc_btn"
+                  onClick={() => printDoc('paid')}
+                  title="Печать / Сохранить в PDF"
+                >
+                  <Printer size={18} />
+                  <div className="receipt_doc_btn_text">
+                    <strong>Печать / Экспорт в PDF</strong>
+                    <small>Формат А4 для печати или банка</small>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  className="receipt_doc_btn"
+                  onClick={() => downloadDoc('bill')}
+                  title="Скачать исходный счёт на оплату"
+                >
+                  <FileText size={18} />
+                  <div className="receipt_doc_btn_text">
+                    <strong>Исходный счёт</strong>
+                    <small>Входящая квитанция на оплату</small>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="payment_revoke_section">
+              <p className="revoke_hint">
+                Если оплата ещё не производилась или отметка была поставлена ошибочно, верните квитанцию в статус «Ожидает оплаты», чтобы контролировать задолженность и избежать начисления пени.
+              </p>
+              <button
+                type="button"
+                className="secondary_button danger_button"
+                disabled={saving}
+                onClick={handleRevokePayment}
+              >
+                {saving ? (
+                  <LoaderCircle size={16} className="spin" />
+                ) : (
+                  <RotateCcw size={16} />
+                )}{' '}
+                Снять отметку об оплате (вернуть в «Ожидает оплаты»)
+              </button>
+            </div>
+
+            <div className="modal_actions" style={{ marginTop: '20px' }}>
+              <button type="button" className="primary_button" onClick={onClose}>
+                Закрыть
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleMarkPaid} className="payment_form">
+            <div className="payment_warning_banner">
+              <ShieldAlert size={22} className="warning_icon" />
+              <div>
+                <strong>Финансовая ответственность</strong>
+                <p>
+                  Отмечайте квитанцию оплаченной <u>только после реального списания средств</u> с вашего банковского счёта (MBANK, Элдик Банк, MegaPay, О!Деньги) или кассы. Ложная отметка может привести к образованию задолженности и отключению услуг!
+                </p>
+              </div>
+            </div>
+
+            <div className="form_row_grid">
+              <div>
+                <label className="form_label" htmlFor="pay_confirm_amount">
+                  Фактически оплаченная сумма (сом) *
+                </label>
+                <input
+                  id="pay_confirm_amount"
+                  inputMode="decimal"
+                  value={paidAmount}
+                  onChange={(e) => setPaidAmount(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <label className="form_label" htmlFor="pay_confirm_date">
+                  Дата фактической оплаты *
+                </label>
+                <input
+                  id="pay_confirm_date"
+                  type="date"
+                  value={paidDate}
+                  onChange={(e) => setPaidDate(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <span className="payment_presets_label">Быстрый выбор банка / способа оплаты:</span>
+              <div className="payment_presets_row">
+                {BANK_PRESETS.map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    className={'preset_pill_btn ' + (paymentMethod === b ? 'active' : '')}
+                    onClick={() => setPaymentMethod(b)}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+              <label className="form_label" htmlFor="pay_confirm_method">
+                Способ оплаты / Банк *
+              </label>
+              <input
+                id="pay_confirm_method"
+                placeholder="Например: MBANK QR, Элдик Банк, О!Деньги"
+                value={paymentMethod}
+                maxLength={100}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                required
+              />
+            </div>
+
+            <div style={{ marginTop: '10px' }}>
+              <label className="form_label" htmlFor="pay_confirm_txn">
+                Номер чека / транзакции (для фискального штампа)
+              </label>
+              <input
+                id="pay_confirm_txn"
+                placeholder="TXN-4011-..."
+                value={transactionId}
+                maxLength={100}
+                onChange={(e) => setTransactionId(e.target.value)}
+              />
+            </div>
+
+            <label className="confirm_checkbox_label" style={{ marginTop: '12px' }}>
+              <input
+                type="checkbox"
+                checked={confirmed}
+                onChange={(e) => setConfirmed(e.target.checked)}
+              />
+              <span>
+                Я подтверждаю, что указанная сумма <strong>{paidAmount || '0'} сом</strong> действительно списана через {paymentMethod || 'банк'}.
+              </span>
+            </label>
+
+            {error && <p className="error">{error}</p>}
+
+            <div className="modal_actions">
+              <button
+                type="button"
+                className="secondary_button"
+                onClick={onClose}
+                disabled={saving}
+              >
+                Отмена
+              </button>
+              <button
+                type="submit"
+                className="primary_button confirm_paid_button"
+                disabled={saving || !confirmed}
+              >
+                {saving ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />}
+                Подтвердить оплату и сформировать чек
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function ChannelsCheckModal({
+  open,
+  loading,
+  data,
+  onClose,
+  onRecheck,
+}: {
+  open: boolean;
+  loading: boolean;
+  data: any;
+  onClose: () => void;
+  onRecheck: () => void;
+}) {
+  if (!open) return null;
+
+  return (
+    <Modal title="Сверка с открытыми каналами коммунальных служб" onClose={onClose}>
+      <div className="payment_modal_content">
+        <p style={{ margin: '0 0 12px 0', fontSize: '13px', color: '#475569' }}>
+          Опрос официальных открытых API и шлюзов коммунальных служб г. Бишкек в реальном времени:
+        </p>
+
+        {loading ? (
+          <div style={{ padding: '30px', textAlign: 'center', color: '#64748b' }}>
+            <LoaderCircle size={28} className="spin" style={{ margin: '0 auto 12px' }} />
+            <p>Опрос шлюзов Бишкекводоканала и Газпрома...</p>
+          </div>
+        ) : data ? (
+          <div>
+            {/* Водоканал */}
+            <div className="channel_card">
+              <div className="channel_card_top">
+                <span className="channel_card_title">
+                  💧 ПЭУ «Бишкекводоканал» (шлюз voda.link.kg)
+                </span>
+                <span className={'channel_status_badge ' + (data.water?.ok ? 'active' : 'blocked')}>
+                  {data.water?.ok ? '✓ Шлюз активен' : 'Ошибка доступа'}
+                </span>
+              </div>
+              <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: '#334155' }}>
+                Лицевой счёт: <strong>{data.water?.account}</strong>
+                {data.water?.address ? ` · Адрес: ${data.water.address}` : ''}
+              </p>
+              <p style={{ margin: '0', fontSize: '11.5px', color: '#64748b' }}>
+                {data.water?.detail}
+              </p>
+              {data.water?.meters && data.water.meters.length > 0 && (
+                <div className="meter_chip_list">
+                  {data.water.meters.map((m: any) => (
+                    <div className="meter_chip" key={m.meterId}>
+                      <span>
+                        {m.kind === 'cold' ? 'Холодная вода (ХВС)' : 'Стоки горячей воды (ГВС)'} · Заводской №{m.serialNumber}
+                      </span>
+                      <strong>Показание в базе: {m.previousReading} м³</strong>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Газпром */}
+            <div className="channel_card">
+              <div className="channel_card_top">
+                <span className="channel_card_title">
+                  🔥 ОсОО «Газпром Кыргызстан» (REST API api.gazprom.kg)
+                </span>
+                <span className={'channel_status_badge ' + (data.gas?.ok ? 'active' : 'blocked')}>
+                  {data.gas?.ok ? '✓ API доступен' : 'Недоступен'}
+                </span>
+              </div>
+              <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: '#334155' }}>
+                Лицевой счёт: <strong>{data.gas?.account}</strong>
+              </p>
+              <p style={{ margin: '0', fontSize: '11.5px', color: '#64748b' }}>
+                {data.gas?.detail}
+              </p>
+            </div>
+
+            {/* НЭСК */}
+            <div className="channel_card">
+              <div className="channel_card_top">
+                <span className="channel_card_title">
+                  ⚡ ОАО «НЭСК» / Бишкекский энергосбыт (Телеметрия АСКУЭ)
+                </span>
+                <span className="channel_status_badge active">✓ АСКУЭ Активен</span>
+              </div>
+              <p style={{ margin: '0 0 6px 0', fontSize: '12px', color: '#334155' }}>
+                Лицевой счёт: <strong>{data.electricity?.account}</strong>
+              </p>
+              <p style={{ margin: '0', fontSize: '11.5px', color: '#64748b' }}>
+                {data.electricity?.detail}
+              </p>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="modal_actions" style={{ marginTop: '16px' }}>
+          <button
+            type="button"
+            className="secondary_button"
+            onClick={onRecheck}
+            disabled={loading}
+          >
+            <RefreshCw size={14} className={loading ? 'spin' : ''} /> Повторить опрос
+          </button>
+          <button type="button" className="primary_button" onClick={onClose}>
+            Закрыть
+          </button>
         </div>
       </div>
     </Modal>
@@ -1365,6 +2058,7 @@ export default function Dashboard({
     [receipts, setReceipts] = useState<Receipt[]>([]),
     [editingReceipt, setEditingReceipt] = useState<Receipt | null | 'new'>(null),
     [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null),
+    [paymentReceipt, setPaymentReceipt] = useState<Receipt | null>(null),
     [receiptFilter, setReceiptFilter] = useState<'all' | 'unpaid' | 'paid'>('all'),
     [values, setValues] = useState<Record<string, Record<string, string>>>({}),
     [editing, setEditing] = useState<ProviderId | null>(null),
@@ -1378,7 +2072,7 @@ export default function Dashboard({
     [syncingMydom, setSyncingMydom] = useState(false),
     [mydomModalOpen, setMydomModalOpen] = useState(false),
     [mydomSettings, setMydomSettings] = useState({
-      account: '3180429',
+      account: '4011',
       phone: '',
       token: '',
       autoSync: true,
@@ -1391,7 +2085,10 @@ export default function Dashboard({
       plan: 'Стандарт (100 Мбит/с)',
       tariff: '850.00',
       syncWithMydom: true,
-    });
+    }),
+    [channelsModalOpen, setChannelsModalOpen] = useState(false),
+    [checkingChannels, setCheckingChannels] = useState(false),
+    [channelsData, setChannelsData] = useState<any>(null);
   const active = readings.filter((r) => r.period === period),
     saved = active.length,
     confirmed = active.filter((r) => r.status === 'confirmed').length,
@@ -1456,80 +2153,73 @@ export default function Dashboard({
         id: 'demo_mydom_1',
         period: bishkekPeriod(),
         category: 'mydom',
-        title: 'Единая квитанция · Мой дом',
-        account: '3180429',
-        amount: '3835.60',
+        title: 'Единая квитанция · Мэрия г. Бишкек',
+        account: '4011 (1-310-У111)',
+        amount: '716.46',
         paidAmount: '0.00',
         status: 'unpaid',
         dueDate: bishkekPeriod() + '-25',
         paidDate: '',
-        fileName: 'mydom_receipt_2026.pdf',
+        fileName: 'Квитанция_2026-11-24 15:09:47.298462.pdf',
         fileData: '',
-        notes: 'ТСЖ «Южные Ворота», кв. 42. Включены городские службы и расходы дома.',
+        notes: 'мкр. Асанбай д. 17 кв. 80. Абонент: Воробьева В.И. Площадь: 34.60 м². Проживающих: 2 чел.',
         items: [
           {
             id: '1',
-            name: 'Техническое обслуживание дома',
-            amount: '1625.00',
-            unit: 'м²',
-            volume: '65',
-            tariff: '25.00',
+            name: 'МП «Бишкектеплосеть» — Отопление и ГВС (л/с 1206080-0)',
+            amount: '632.00',
+            unit: 'мес.',
+            volume: '1',
+            tariff: '632.00',
           },
           {
             id: '2',
-            name: 'Обслуживание пассажирского лифта',
-            amount: '220.00',
-            unit: 'мес.',
-            volume: '1',
-            tariff: '220.00',
+            name: 'МП «Тазалык» — Вывоз ТБО (л/с 9944461-0, 2 чел.)',
+            amount: '84.46',
+            unit: 'чел.',
+            volume: '2',
+            tariff: '41.00',
           },
           {
             id: '3',
-            name: 'Вывоз ТБО (МП «Тазалык»)',
-            amount: '135.00',
-            unit: 'чел.',
-            volume: '3',
-            tariff: '45.00',
+            name: 'ПЭУ «Бишкекводоканал» — Холодная вода и стоки (л/с 1291067-0)',
+            amount: '0.00',
+            unit: 'м³',
+            volume: '0',
+            tariff: '0.00',
           },
           {
             id: '4',
-            name: 'Холодное водоснабжение и стоки',
-            amount: '215.60',
+            name: 'ОсОО «Газпром Кыргызстан» — Природный газ (л/с 011701957)',
+            amount: '0.00',
             unit: 'м³',
-            volume: '14',
-            tariff: '15.40',
+            volume: '0',
+            tariff: '0.00',
           },
+        ],
+      },
+      {
+        id: 'demo_nesk_1',
+        period: bishkekPeriod(),
+        category: 'electricity',
+        title: 'Счёт за электроэнергию · ОАО «НЭСК»',
+        account: '319177353',
+        amount: '1095.52',
+        paidAmount: '0.00',
+        status: 'unpaid',
+        dueDate: bishkekPeriod() + '-30',
+        paidDate: '',
+        fileName: 'Квитанция_2026-11-24 15:09:47.298462.pdf',
+        fileData: '',
+        notes: 'ОАО «НЭСК» / Бишкекский энергосбыт. мкр. Асанбай д. 17 кв. 80. Показания: 77274 → 77942. Расход: 668 кВт·ч.',
+        items: [
           {
-            id: '5',
-            name: 'Горячее водоснабжение и подогрев',
-            amount: '480.00',
-            unit: 'м³',
-            volume: '6',
-            tariff: '80.00',
-          },
-          {
-            id: '6',
-            name: 'Домофонная связь',
-            amount: '80.00',
-            unit: 'мес.',
-            volume: '1',
-            tariff: '80.00',
-          },
-          {
-            id: '7',
-            name: 'Охрана и видеонаблюдение территории',
-            amount: '230.00',
-            unit: 'мес.',
-            volume: '1',
-            tariff: '230.00',
-          },
-          {
-            id: '8',
-            name: 'Интернет и ТВ (Homeline GPON)',
-            amount: '850.00',
-            unit: 'мес.',
-            volume: '1',
-            tariff: '850.00',
+            id: 'n1',
+            name: 'Электроэнергия ОАО «НЭСК» (показания 77274 → 77942, расход 668 кВт·ч)',
+            amount: '1095.52',
+            unit: 'кВт·ч',
+            volume: '668',
+            tariff: '1.64',
           },
         ],
       },
@@ -1627,23 +2317,144 @@ export default function Dashboard({
     await reload();
     setNotice('Квитанция удалена.');
   }
-  async function toggleReceiptPaid(r: Receipt) {
-    const isNowPaid = r.status !== 'paid';
-    const updated: Receipt = {
-      ...r,
-      status: isNowPaid ? 'paid' : 'unpaid',
-      paidAmount: isNowPaid ? r.amount : '0.00',
-      paidDate: isNowPaid ? new Date().toISOString().slice(0, 10) : '',
-    };
+  async function saveReceiptPayment(updated: Receipt) {
     if (demo) {
-      setReceipts((rs) => rs.map((x) => (x.id === r.id ? updated : x)));
-      setNotice(isNowPaid ? 'Квитанция отмечена оплаченной.' : 'Статус изменён на: к оплате.');
+      setReceipts((rs) => rs.map((x) => (x.id === updated.id ? updated : x)));
+      setNotice(
+        updated.status === 'paid'
+          ? 'Квитанция подтверждена как оплаченная.'
+          : updated.status === 'partial'
+            ? 'Частичная оплата сохранена.'
+            : 'Статус квитанции изменён на: к оплате.',
+      );
       return;
     }
     await api('receipts', updated);
     await reload();
-    setNotice(isNowPaid ? 'Квитанция отмечена оплаченной.' : 'Статус изменён на: к оплате.');
+    setNotice(
+      updated.status === 'paid'
+        ? 'Квитанция подтверждена как оплаченная.'
+        : updated.status === 'partial'
+          ? 'Частичная оплата сохранена.'
+          : 'Статус квитанции изменён на: к оплате.',
+    );
   }
+  async function checkOpenChannels() {
+    if (demo) {
+      setCheckingChannels(true);
+      setTimeout(() => {
+        setCheckingChannels(false);
+        setChannelsData({
+          water: {
+            ok: true,
+            account: '1291067-0',
+            address: 'мкр. Асанбай д. 17 кв. 80',
+            meters: [
+              { meterId: '1', serialNumber: '922', kind: 'cold', previousReading: '922' },
+              { meterId: '2', serialNumber: '5', kind: 'hot', previousReading: '5' },
+            ],
+            detail: 'Бишкекводоканал: в базе зарегистрировано водомеров: 2 шт. Шлюз активен.',
+          },
+          gas: {
+            ok: true,
+            account: '011701957',
+            status: 'active',
+            detail: 'Официальный публичный REST API Газпром Кыргызстан активен. Шлюз готов к приёму показаний.',
+          },
+          electricity: {
+            ok: true,
+            account: '319177353',
+            status: 'active',
+            detail: 'ОАО «НЭСК» (Бишкекский энергосбыт): умный счётчик АСКУЭ №77274 активен.',
+          },
+        });
+        setChannelsModalOpen(true);
+      }, 500);
+      return;
+    }
+    setCheckingChannels(true);
+    try {
+      const res = await api('providers/check');
+      if (res?.ok) {
+        setChannelsData(res.channels);
+        setChannelsModalOpen(true);
+        setNotice('Сверка по открытым каналам поставщиков успешно выполнена.');
+      } else {
+        setNotice(res?.error || 'Не удалось выполнить сверку каналов.');
+      }
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setCheckingChannels(false);
+    }
+  }
+
+  async function syncAllReceipts() {
+    if (demo) {
+      setSyncingMydom(true);
+      setTimeout(() => {
+        setSyncingMydom(false);
+        setNotice('Квитанции Мэрии и НЭСК синхронизированы (демо-режим).');
+      }, 500);
+      return;
+    }
+    setSyncingMydom(true);
+    try {
+      const res = await api('receipts/sync', {
+        category: 'all',
+        account: mydomSettings.account || '4011',
+        period,
+      });
+      if (res?.receipts && res.receipts.length > 0) {
+        setReceipts((prev) => {
+          const map = new Map(prev.map((r) => [r.id, r]));
+          for (const item of res.receipts) {
+            map.set(item.id, item);
+          }
+          return Array.from(map.values());
+        });
+        setNotice(`Синхронизировано квитанций: ${res.receipts.length} за ${monthLabel(period)} (Мэрия и НЭСК).`);
+      } else if (res?.receipt) {
+        setReceipts((prev) => [res.receipt, ...prev.filter((r) => r.id !== res.receipt.id)]);
+        setNotice(`Квитанция за ${monthLabel(period)} синхронизирована.`);
+      }
+    } catch (e: unknown) {
+      setNotice(e instanceof Error ? e.message : 'Ошибка синхронизации квитанций.');
+    } finally {
+      setSyncingMydom(false);
+    }
+  }
+
+  function downloadReceiptDoc(r: Receipt, mode: 'bill' | 'paid') {
+    if (mode === 'bill' && r.fileData && r.fileData.startsWith('data:application/pdf')) {
+      const link = document.createElement('a');
+      link.href = r.fileData;
+      link.download = r.fileName || `Schet_na_oplatu_${r.period}_${r.account || '4011'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+    const svg = generateReceiptSvg({ receipt: r, mode });
+    const link = document.createElement('a');
+    link.href = svg;
+    const prefix = mode === 'paid' ? 'Oplacheno' : 'Schet_na_oplatu';
+    link.download = `${prefix}_${r.period}_${r.account || '4011'}.svg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function printReceiptDoc(r: Receipt, mode: 'bill' | 'paid') {
+    const html = generatePrintableReceiptHtml({ receipt: r, mode });
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+    }
+  }
+
   async function syncMydom() {
     if (demo) {
       setSyncingMydom(true);
@@ -2461,8 +3272,23 @@ export default function Dashboard({
                 </div>
 
                 <div className="receipts_toolbar_actions">
-                  <button className="secondary_button" onClick={() => setEditingReceipt('new')}>
-                    <Sparkles size={15} /> Шаблон «Мой дом»
+                  <button
+                    className="secondary_button"
+                    onClick={checkOpenChannels}
+                    disabled={checkingChannels}
+                    title="Опросить открытые шлюзы Бишкекводоканала и Газпрома"
+                  >
+                    <RefreshCw size={15} className={checkingChannels ? 'spin' : ''} />
+                    {checkingChannels ? 'Опрос...' : 'Сверить открытые каналы'}
+                  </button>
+                  <button
+                    className="secondary_button"
+                    onClick={syncAllReceipts}
+                    disabled={syncingMydom}
+                    title="Синхронизировать начисления Мэрии г. Бишкек (4011) и ОАО НЭСК (319177353)"
+                  >
+                    <Sparkles size={15} className={syncingMydom ? 'spin' : ''} />
+                    {syncingMydom ? 'Сбор...' : 'Синхронизировать квитанции'}
                   </button>
                   <button className="primary_button" onClick={() => setEditingReceipt('new')}>
                     <Plus size={16} /> Добавить квитанцию
@@ -2502,7 +3328,7 @@ export default function Dashboard({
                           </span>
                           <span className={'receipt_status_pill ' + r.status}>
                             {r.status === 'paid'
-                              ? 'Оплачено'
+                              ? '✓ Оплачено'
                               : r.status === 'partial'
                                 ? 'Частично'
                                 : 'Ожидает оплаты'}
@@ -2516,13 +3342,38 @@ export default function Dashboard({
                               Лицевой счёт: <strong>{r.account}</strong>
                             </p>
                           )}
-                          <div className="receipt_card_sum">
-                            <strong>{r.amount}</strong>
-                            <span> сом</span>
+                          <div className={'receipt_card_sum ' + r.status}>
+                            <span className="sum_caption">
+                              {r.status === 'paid'
+                                ? 'Оплачено:'
+                                : r.status === 'partial'
+                                  ? 'Остаток долга:'
+                                  : 'К оплате:'}
+                            </span>
+                            <div className="sum_val_line">
+                              <strong>
+                                {r.status === 'paid'
+                                  ? r.paidAmount || r.amount
+                                  : r.status === 'partial'
+                                    ? (Number(r.amount) - Number(r.paidAmount)).toFixed(2)
+                                    : r.amount}
+                              </strong>
+                              <span> сом</span>
+                            </div>
+                            {r.status === 'partial' && (
+                              <small className="partial_detail">
+                                из {r.amount} с. (оплачено {r.paidAmount} с.)
+                              </small>
+                            )}
                           </div>
-                          {r.dueDate && (
+                          {r.dueDate && r.status !== 'paid' && (
                             <p className="receipt_card_due">
                               <CalendarDays size={13} /> Срок оплаты: до {r.dueDate}
+                            </p>
+                          )}
+                          {r.paidDate && r.status === 'paid' && (
+                            <p className="receipt_card_due is_paid_date">
+                              <CheckCircle2 size={13} /> Оплачено: {r.paidDate}
                             </p>
                           )}
 
@@ -2571,12 +3422,53 @@ export default function Dashboard({
                             className={
                               'status_toggle_btn ' + (r.status === 'paid' ? 'is_paid' : 'is_unpaid')
                             }
-                            onClick={() => toggleReceiptPaid(r)}
+                            onClick={() => setPaymentReceipt(r)}
+                            title={
+                              r.status === 'paid'
+                                ? 'Квитанция оплачена. Нажмите для просмотра или отмены'
+                                : 'Открыть подтверждение оплаты'
+                            }
                           >
-                            <Check size={14} />
-                            {r.status === 'paid' ? 'Оплачено' : 'Отметить оплаченным'}
+                            {r.status === 'paid' ? (
+                              <>
+                                <Check size={14} />
+                                <span>Оплачено · Изменить</span>
+                              </>
+                            ) : (
+                              <>
+                                <CreditCard size={14} />
+                                <span>Отметить оплату...</span>
+                              </>
+                            )}
                           </button>
                           <div className="receipt_card_actions">
+                            <button
+                              type="button"
+                              className="icon_button"
+                              title="Скачать счёт на оплату (приходящая квитанция)"
+                              onClick={() => downloadReceiptDoc(r, 'bill')}
+                            >
+                              <FileText size={16} />
+                            </button>
+                            {r.status === 'paid' && (
+                              <button
+                                type="button"
+                                className="icon_button"
+                                style={{ color: '#16a34a' }}
+                                title="Скачать оплаченную квитанцию с фискальным штампом"
+                                onClick={() => downloadReceiptDoc(r, 'paid')}
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="icon_button"
+                              title="Распечатать / Сохранить в PDF"
+                              onClick={() => printReceiptDoc(r, r.status === 'paid' ? 'paid' : 'bill')}
+                            >
+                              <Printer size={16} />
+                            </button>
                             <button
                               type="button"
                               className="icon_button"
@@ -3014,7 +3906,19 @@ export default function Dashboard({
             await deleteReceipt(viewingReceipt.id);
             setViewingReceipt(null);
           }}
+          onManagePayment={() => {
+            const target = viewingReceipt;
+            setViewingReceipt(null);
+            setPaymentReceipt(target);
+          }}
           onClose={() => setViewingReceipt(null)}
+        />
+      )}
+      {paymentReceipt && (
+        <PaymentConfirmModal
+          receipt={paymentReceipt}
+          onSave={saveReceiptPayment}
+          onClose={() => setPaymentReceipt(null)}
         />
       )}
       <MydomSettingsModal
@@ -3032,6 +3936,13 @@ export default function Dashboard({
         onClose={() => setInternetModalOpen(false)}
         onChange={setInternetSettings}
         onCreateReceipt={createInternetReceipt}
+      />
+      <ChannelsCheckModal
+        open={channelsModalOpen}
+        loading={checkingChannels}
+        data={channelsData}
+        onClose={() => setChannelsModalOpen(false)}
+        onRecheck={checkOpenChannels}
       />
       {notice && (
         <div className="toast" role="status">

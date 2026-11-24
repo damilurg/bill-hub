@@ -115,6 +115,10 @@ test('receipt validation normalizes money, auto-calculates status and preserves 
   const partial = validateReceipt({ ...r, paidAmount: '1000' });
   assert.equal(partial.status, 'partial');
 
+  // Test zero paidAmount cannot have paid status
+  const zeroPaid = validateReceipt({ ...r, paidAmount: '0.00', status: 'paid' });
+  assert.equal(zeroPaid.status, 'unpaid');
+
   // Test invalid amount
   assert.throws(() => validateReceipt({ ...r, amount: '-10' }));
   assert.throws(() => validateReceipt({ ...r, amount: 'abc' }));

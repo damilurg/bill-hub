@@ -254,3 +254,134 @@ export async function sendWater(
     };
   }
 }
+
+export type WaterInquiryResult = {
+  ok: boolean;
+  account: string;
+  address?: string;
+  meters: Array<{
+    meterId: string;
+    serialNumber: string;
+    kind: 'cold' | 'hot';
+    previousReading: string;
+    address?: string;
+  }>;
+  detail: string;
+};
+
+export async function checkWaterMeters(
+  account: string,
+  fetcher: Fetcher = fetch,
+): Promise<WaterInquiryResult> {
+  let loginRes: Response;
+  try {
+    loginRes = await fetcher(`${WATER_ORIGIN}/send/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ mode: 'login', data: account }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: 'Сайт Бишкекводоканала недоступен.',
+    };
+  }
+
+  if (!loginRes.ok) {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: `Бишкекводоканал ответил HTTP ${loginRes.status}.`,
+    };
+  }
+
+  let loginData: unknown;
+  try {
+    loginData = await loginRes.json();
+  } catch {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: 'Получен некорректный ответ от Бишкекводоканала.',
+    };
+  }
+
+  if (!Array.isArray(loginData) || loginData[0] === 0) {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: `Лицевой счёт ${account} не найден в Бишкекводоканале.`,
+    };
+  }
+
+  const sessionPath = String(loginData[1] || '');
+  if (!sessionPath) {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: 'Не удалось получить путь сессии от Бишкекводоканала.',
+    };
+  }
+
+  let formRes: Response;
+  try {
+    formRes = await fetcher(`${WATER_ORIGIN}/send/${sessionPath}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ mode: 'loadForm', account }),
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: 'Не удалось загрузить счётчики с портала Бишкекводоканала.',
+    };
+  }
+
+  if (!formRes.ok) {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: `Ошибка загрузки формы Бишкекводоканала (HTTP ${formRes.status}).`,
+    };
+  }
+
+  let formData: Record<string, unknown>;
+  try {
+    formData = (await formRes.json()) as Record<string, unknown>;
+  } catch {
+    return {
+      ok: false,
+      account,
+      meters: [],
+      detail: 'Не удалось прочитать список водомеров Бишкекводоканала.',
+    };
+  }
+
+  const waterMeters: WaterMeter[] = (formData?.waterMeters as WaterMeter[]) || [];
+  const address = waterMeters[0]?.ADDRESS || '';
+
+  return {
+    ok: true,
+    account,
+    address,
+    meters: waterMeters.map((m) => ({
+      meterId: `${m.HYDID}:${m.HYDNUM}`,
+      serialNumber: String(m.HYDNUM ?? ''),
+      kind: m.HG === 'H' ? 'cold' : 'hot',
+      previousReading: String(m.POKAZAN ?? '0'),
+      address: m.ADDRESS,
+    })),
+    detail: `Бишкекводоканал: в базе зарегистрировано водомеров: ${waterMeters.length} шт.${address ? ` (Адрес: ${address})` : ''}. Шлюз активен.`,
+  };
+}
