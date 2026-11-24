@@ -93,6 +93,7 @@ const routes = {
   accounts: await import('../app/api/accounts/route.ts'),
   readings: await import('../app/api/readings/route.ts'),
   receipts: await import('../app/api/receipts/route.ts'),
+  receiptsSync: await import('../app/api/receipts/sync/route.ts'),
   state: await import('../app/api/state/route.ts'),
   submit: await import('../app/api/submit/route.ts'),
   export: await import('../app/api/export/route.ts'),
@@ -345,4 +346,20 @@ test('routes: receipt CRUD and state synchronization', async () => {
 
   const stateAfterDel = await request('state');
   assert.equal(stateAfterDel.data.receipts.length, 0);
+});
+
+test('routes: receiptsSync imports Moy Dom receipt and persists to database', async () => {
+  const syncRes = await request('receiptsSync', {
+    account: '3180429',
+    period: '2026-10',
+  });
+  assert.equal(syncRes.status, 200);
+  assert.equal(syncRes.data.ok, true);
+  assert.equal(syncRes.data.receipt.category, 'mydom');
+  assert.equal(syncRes.data.receipt.period, '2026-10');
+  assert.ok(syncRes.data.receipt.items.length >= 5);
+
+  const state = await request('state');
+  assert.equal(state.data.receipts.length, 1);
+  assert.equal(state.data.receipts[0].account, '3180429');
 });

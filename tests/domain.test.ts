@@ -120,3 +120,35 @@ test('receipt validation normalizes money, auto-calculates status and preserves 
   assert.throws(() => validateReceipt({ ...r, amount: 'abc' }));
   assert.throws(() => validateReceipt({ ...r, category: 'unknown_cat' }));
 });
+
+test('receipt validation supports internet category and Homeline provider', async () => {
+  const { INTERNET_PROVIDERS, validateReceipt } = await import('../lib/domain.ts');
+  const homeline = INTERNET_PROVIDERS.find((p) => p.id === 'homeline');
+  assert.ok(homeline);
+  assert.equal(homeline.isMydomPartner, true);
+
+  const receipt = validateReceipt({
+    id: 'isp_rec_1',
+    period: '2026-10',
+    category: 'internet',
+    title: 'Интернет Homeline · Стандарт 100 Мбит/с',
+    account: 'HL-84920',
+    amount: '850.00',
+    paidAmount: '0.00',
+    status: 'unpaid',
+    dueDate: '2026-11-01',
+    items: [
+      {
+        id: '1',
+        name: 'Абонентская плата Homeline 100 Мбит/с',
+        amount: '850.00',
+        unit: 'мес.',
+        volume: '1',
+      },
+    ],
+  });
+
+  assert.equal(receipt.category, 'internet');
+  assert.equal(receipt.amount, '850.00');
+  assert.equal(receipt.status, 'unpaid');
+});

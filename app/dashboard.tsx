@@ -33,6 +33,8 @@ import {
   Eye,
   Sparkles,
   Building2,
+  RefreshCw,
+  Wifi,
 } from 'lucide-react';
 import {
   PROVIDERS,
@@ -51,6 +53,8 @@ import {
   receiptCategories,
   MYDOM_DEFAULT_ITEMS,
   RECEIPT_CATEGORIES,
+  INTERNET_PROVIDERS,
+  type InternetProviderInfo,
   validateReceipt,
 } from '@/lib/domain';
 const icons = { water: Droplets, heat: Waves, gas: Flame, electricity: Zap };
@@ -414,6 +418,44 @@ function ReceiptModal({
             ))}
           </div>
         </div>
+
+        {category === 'internet' && (
+          <div className="isp_quick_select">
+            <span className="isp_quick_label">
+              <Wifi size={13} /> Провайдеры в Бишкеке (выберите для быстрого заполнения):
+            </span>
+            <div className="isp_chips">
+              {INTERNET_PROVIDERS.map((isp) => (
+                <button
+                  type="button"
+                  key={isp.id}
+                  className="isp_chip"
+                  onClick={() => {
+                    setTitle(`Интернет ${isp.name} · ${isp.planName}`);
+                    setAmount(isp.defaultTariff);
+                    setItems([
+                      {
+                        id: 'isp_1',
+                        name: `Абонентская плата ${isp.name} (${isp.planName})`,
+                        amount: isp.defaultTariff,
+                        unit: 'мес.',
+                        volume: '1',
+                        tariff: isp.defaultTariff,
+                      },
+                    ]);
+                  }}
+                >
+                  {isp.isMydomPartner && (
+                    <span className="partner_star" title="Официальный партнёр «Мой дом»">
+                      ★{' '}
+                    </span>
+                  )}
+                  {isp.name} · {isp.defaultTariff} с
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="form_row_grid">
           <div>
@@ -803,6 +845,302 @@ function ReceiptViewModal({
   );
 }
 
+function MydomSettingsModal({
+  open,
+  settings,
+  syncing,
+  onClose,
+  onChange,
+  onSync,
+}: {
+  open: boolean;
+  settings: { account: string; phone: string; token: string; autoSync: boolean };
+  syncing: boolean;
+  onClose: () => void;
+  onChange: (s: { account: string; phone: string; token: string; autoSync: boolean }) => void;
+  onSync: () => Promise<void>;
+}) {
+  const [tokenHelp, setTokenHelp] = useState(false);
+  if (!open) return null;
+
+  return (
+    <Modal title="Подключение «Мой дом» (mydom.kg)" onClose={onClose}>
+      <div className="mydom_modal_content">
+        <div className="mydom_brand_header">
+          <div className="mydom_badge_icon">
+            <Building2 size={24} />
+          </div>
+          <div>
+            <h3>Автоматическое получение квитанций</h3>
+            <p>
+              Приложение «Мой дом» (kg.mydom.one) формирует единую квитанцию по ТСЖ, лифту,
+              «Тазалыку», воде и теплу. Bill-Hub умеет автоматически скачивать и сверять начисления.
+            </p>
+          </div>
+        </div>
+
+        <div className="form_group">
+          <label htmlFor="mydom_account">Лицевой счёт абонента / Номер договора</label>
+          <input
+            id="mydom_account"
+            type="text"
+            className="input"
+            value={settings.account}
+            placeholder="Например, 3180429"
+            onChange={(e) => onChange({ ...settings, account: e.target.value })}
+          />
+          <small className="help_text">
+            Указан на бумажной квитанции или в приложении «Мой дом» в карточке квартиры.
+          </small>
+        </div>
+
+        <div className="form_group">
+          <label htmlFor="mydom_phone">Номер телефона (привязанный к приложению)</label>
+          <input
+            id="mydom_phone"
+            type="tel"
+            className="input"
+            value={settings.phone}
+            placeholder="+996 700 000 000"
+            onChange={(e) => onChange({ ...settings, phone: e.target.value })}
+          />
+        </div>
+
+        <div className="form_group">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <label htmlFor="mydom_token">Токен авторизации сессии (опционально)</label>
+            <button
+              type="button"
+              className="text_button"
+              style={{ fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px' }}
+              onClick={() => setTokenHelp(!tokenHelp)}
+            >
+              <HelpCircle size={13} /> {tokenHelp ? 'Скрыть подсказку' : 'Как получить токен?'}
+            </button>
+          </div>
+          <input
+            id="mydom_token"
+            type="password"
+            className="input font_mono"
+            value={settings.token}
+            placeholder="Bearer token или batir_session"
+            onChange={(e) => onChange({ ...settings, token: e.target.value })}
+          />
+          {tokenHelp ? (
+            <div className="token_help_callout">
+              <Info size={16} />
+              <div style={{ fontSize: '0.82rem', lineHeight: '1.4' }}>
+                Поскольку приложение «Мой дом» закрыто авторизацией (SMS-коды), для прямой фоновой
+                выгрузки из личного кабинета требуется токен. Вы можете скопировать Bearer токен из
+                заголовка <code>Authorization</code> в DevTools (сеть) на сайте{' '}
+                <code>batir.mydom.kg</code> или в мобильном перехватчике. Без токена система
+                использует автоматическую синхронизацию по лицевому счёту и шаблону вашего ТСЖ.
+              </div>
+            </div>
+          ) : (
+            <small className="help_text">
+              Для прямого API-доступа к личному кабинету жильца batir.mydom.kg
+            </small>
+          )}
+        </div>
+
+        <div className="form_group">
+          <label
+            className="checkbox_label"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+          >
+            <input
+              type="checkbox"
+              checked={settings.autoSync}
+              onChange={(e) => onChange({ ...settings, autoSync: e.target.checked })}
+            />
+            <span>Автоматически проверять квитанцию каждого 5-го числа месяца</span>
+          </label>
+        </div>
+
+        <div className="modal_actions" style={{ marginTop: '20px' }}>
+          <button type="button" className="secondary_button" onClick={onClose}>
+            Отмена
+          </button>
+          <button
+            type="button"
+            className="primary_button"
+            disabled={syncing}
+            onClick={onSync}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <RefreshCw size={15} className={syncing ? 'spin' : ''} />
+            {syncing ? 'Синхронизация...' : 'Загрузить квитанцию сейчас'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function InternetSettingsModal({
+  open,
+  settings,
+  period,
+  onClose,
+  onChange,
+  onCreateReceipt,
+}: {
+  open: boolean;
+  settings: {
+    providerId: string;
+    providerName: string;
+    account: string;
+    plan: string;
+    tariff: string;
+    syncWithMydom: boolean;
+  };
+  period: string;
+  onClose: () => void;
+  onChange: (s: {
+    providerId: string;
+    providerName: string;
+    account: string;
+    plan: string;
+    tariff: string;
+    syncWithMydom: boolean;
+  }) => void;
+  onCreateReceipt: () => Promise<void>;
+}) {
+  const [createdNotice, setCreatedNotice] = useState(false);
+  if (!open) return null;
+
+  const currentIsp =
+    INTERNET_PROVIDERS.find((p) => p.id === settings.providerId) || INTERNET_PROVIDERS[0];
+
+  return (
+    <Modal title="Подключение интернета и ТВ" onClose={onClose}>
+      <div className="mydom_modal_content">
+        <div
+          className="mydom_brand_header"
+          style={{ background: '#ecfeff', borderColor: '#a5f3fc' }}
+        >
+          <div className="mydom_badge_icon" style={{ background: '#0891b2' }}>
+            <Wifi size={24} />
+          </div>
+          <div>
+            <h3 style={{ color: '#0e7490' }}>
+              {currentIsp.name} {currentIsp.isMydomPartner && '· Официальный партнёр «Мой дом»'}
+            </h3>
+            <p style={{ color: '#155e75' }}>
+              Платформа «Мой дом» интегрирована с Homeline и поддерживает учёт всех провайдеров
+              Бишкека. Счета за интернет сохраняются в общий архив и сверяются с расходами квартиры.
+            </p>
+          </div>
+        </div>
+
+        <div className="form_group">
+          <label htmlFor="isp_provider_select">Интернет-провайдер в вашем доме</label>
+          <select
+            id="isp_provider_select"
+            className="input"
+            value={settings.providerId}
+            onChange={(e) => {
+              const selected = INTERNET_PROVIDERS.find((p) => p.id === e.target.value);
+              if (selected) {
+                onChange({
+                  ...settings,
+                  providerId: selected.id,
+                  providerName: selected.name,
+                  plan: selected.planName,
+                  tariff: selected.defaultTariff,
+                });
+              }
+            }}
+          >
+            {INTERNET_PROVIDERS.map((isp) => (
+              <option key={isp.id} value={isp.id}>
+                {isp.name} {isp.isMydomPartner ? '★ (Партнёр Мой дом)' : ''} · от{' '}
+                {isp.defaultTariff} с
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form_group">
+          <label htmlFor="isp_account">Лицевой счёт / Логин абонента</label>
+          <input
+            id="isp_account"
+            type="text"
+            className="input"
+            value={settings.account}
+            placeholder="Например, HL-84920"
+            onChange={(e) => onChange({ ...settings, account: e.target.value })}
+          />
+          <small className="help_text">
+            Указан в договоре на интернет или в чеке оплаты (MegaPay, MBANK, О!Деньги).
+          </small>
+        </div>
+
+        <div className="form_row_grid">
+          <div>
+            <label className="form_label" htmlFor="isp_plan">
+              Тарифный план
+            </label>
+            <input
+              id="isp_plan"
+              className="input"
+              value={settings.plan}
+              placeholder="Например, Стандарт 100 Мбит/с"
+              onChange={(e) => onChange({ ...settings, plan: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="form_label" htmlFor="isp_tariff">
+              Абонплата (сом/мес)
+            </label>
+            <input
+              id="isp_tariff"
+              className="input"
+              value={settings.tariff}
+              placeholder="850.00"
+              onChange={(e) => onChange({ ...settings, tariff: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="form_group">
+          <label
+            className="checkbox_label"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+          >
+            <input
+              type="checkbox"
+              checked={settings.syncWithMydom}
+              onChange={(e) => onChange({ ...settings, syncWithMydom: e.target.checked })}
+            />
+            <span>Учитывать расходы на интернет в квитанциях «Мой дом»</span>
+          </label>
+        </div>
+
+        <div className="modal_actions" style={{ marginTop: '20px' }}>
+          <button type="button" className="secondary_button" onClick={onClose}>
+            Закрыть
+          </button>
+          <button
+            type="button"
+            className="primary_button"
+            style={{ background: '#0891b2', borderColor: '#0891b2' }}
+            disabled={createdNotice}
+            onClick={async () => {
+              setCreatedNotice(true);
+              await onCreateReceipt();
+              onClose();
+            }}
+          >
+            <Plus size={15} /> Создать квитанцию за {monthLabel(period)}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 const METER_SPECS: Record<ProviderId, string> = {
   water: 'СВК-15 · КЛАСС B · Qn 1.5 m³/h',
   gas: 'G-4 · ТАХИОМЕТРИЧЕСКИЙ · PN 0.05',
@@ -1036,7 +1374,24 @@ export default function Dashboard({
     [errors, setErrors] = useState<Record<string, string>>({}),
     [review, setReview] = useState(false),
     [checked, setChecked] = useState(false),
-    [filter, setFilter] = useState('all');
+    [filter, setFilter] = useState('all'),
+    [syncingMydom, setSyncingMydom] = useState(false),
+    [mydomModalOpen, setMydomModalOpen] = useState(false),
+    [mydomSettings, setMydomSettings] = useState({
+      account: '3180429',
+      phone: '',
+      token: '',
+      autoSync: true,
+    }),
+    [internetModalOpen, setInternetModalOpen] = useState(false),
+    [internetSettings, setInternetSettings] = useState({
+      providerId: 'homeline',
+      providerName: 'Homeline (Хоумлайн)',
+      account: 'HL-84920',
+      plan: 'Стандарт (100 Мбит/с)',
+      tariff: '850.00',
+      syncWithMydom: true,
+    });
   const active = readings.filter((r) => r.period === period),
     saved = active.length,
     confirmed = active.filter((r) => r.status === 'confirmed').length,
@@ -1103,7 +1458,7 @@ export default function Dashboard({
         category: 'mydom',
         title: 'Единая квитанция · Мой дом',
         account: '3180429',
-        amount: '2985.60',
+        amount: '3835.60',
         paidAmount: '0.00',
         status: 'unpaid',
         dueDate: bishkekPeriod() + '-25',
@@ -1167,6 +1522,39 @@ export default function Dashboard({
             unit: 'мес.',
             volume: '1',
             tariff: '230.00',
+          },
+          {
+            id: '8',
+            name: 'Интернет и ТВ (Homeline GPON)',
+            amount: '850.00',
+            unit: 'мес.',
+            volume: '1',
+            tariff: '850.00',
+          },
+        ],
+      },
+      {
+        id: 'demo_homeline_1',
+        period: bishkekPeriod(),
+        category: 'internet',
+        title: 'Интернет Homeline · Стандарт 100 Мбит/с',
+        account: 'HL-84920',
+        amount: '850.00',
+        paidAmount: '0.00',
+        status: 'unpaid',
+        dueDate: bishkekPeriod() + '-01',
+        paidDate: '',
+        fileName: 'homeline_receipt.pdf',
+        fileData: '',
+        notes: 'Официальный интернет-партнёр «Мой дом». Безлимитный GPON интернет.',
+        items: [
+          {
+            id: 'hl1',
+            name: 'Абонентская плата (Безлимитный GPON 100 Мбит/с)',
+            amount: '850.00',
+            unit: 'мес.',
+            volume: '1',
+            tariff: '850.00',
           },
         ],
       },
@@ -1255,6 +1643,81 @@ export default function Dashboard({
     await api('receipts', updated);
     await reload();
     setNotice(isNowPaid ? 'Квитанция отмечена оплаченной.' : 'Статус изменён на: к оплате.');
+  }
+  async function syncMydom() {
+    if (demo) {
+      setSyncingMydom(true);
+      setTimeout(() => {
+        setSyncingMydom(false);
+        setNotice('Квитанция «Мой дом» синхронизирована (демо-режим).');
+        if (mydomModalOpen) setMydomModalOpen(false);
+      }, 600);
+      return;
+    }
+    if (!authenticated) {
+      setNotice('Войдите, чтобы синхронизировать квитанции.');
+      return;
+    }
+    setSyncingMydom(true);
+    try {
+      const res = await api('receipts/sync', {
+        account: mydomSettings.account,
+        phone: mydomSettings.phone,
+        token: mydomSettings.token,
+        period,
+      });
+      if (res?.receipt) {
+        setReceipts((prev) => {
+          const others = prev.filter(
+            (r) =>
+              r.id !== res.receipt.id &&
+              !(
+                r.period === res.receipt.period &&
+                r.category === res.receipt.category &&
+                r.account === res.receipt.account
+              ),
+          );
+          return [res.receipt, ...others];
+        });
+        setNotice(
+          `Квитанция «Мой дом» за ${monthLabel(period)} успешно загружена (${res.receipt.amount} сом).`,
+        );
+        if (mydomModalOpen) setMydomModalOpen(false);
+      }
+    } catch (e: unknown) {
+      setNotice(e instanceof Error ? e.message : 'Ошибка синхронизации с «Мой дом».');
+    } finally {
+      setSyncingMydom(false);
+    }
+  }
+  async function createInternetReceipt() {
+    const r: Receipt = {
+      id: `internet_${period}_${internetSettings.providerId}`,
+      period,
+      category: 'internet',
+      title: `Интернет ${internetSettings.providerName} · ${internetSettings.plan}`,
+      account: internetSettings.account,
+      amount: internetSettings.tariff,
+      paidAmount: '0.00',
+      status: 'unpaid',
+      dueDate: `${period}-01`,
+      paidDate: '',
+      items: [
+        {
+          id: 'isp_item_1',
+          name: `Абонентская плата ${internetSettings.providerName} (${internetSettings.plan})`,
+          amount: internetSettings.tariff,
+          unit: 'мес.',
+          volume: '1',
+          tariff: internetSettings.tariff,
+        },
+      ],
+      fileName: '',
+      fileData: '',
+      notes: `Провайдер ${internetSettings.providerName}. Абонентский счёт: ${internetSettings.account}. Оплата до 1-го числа месяца.`,
+    };
+    await saveReceipt(r);
+    setNotice(`Квитанция за интернет (${internetSettings.providerName}) добавлена.`);
   }
   async function saveAccount(a: Account) {
     if (demo) {
@@ -1443,7 +1906,7 @@ export default function Dashboard({
               {n.id === 'receipts' && unpaidCount > 0 && (
                 <span className="nav_count warning">{unpaidCount}</span>
               )}
-              {n.id === 'connections' && <span className="nav_count">4</span>}
+              {n.id === 'connections' && <span className="nav_count">6</span>}
             </button>
           ))}
         </nav>
@@ -1580,9 +2043,21 @@ export default function Dashboard({
                   </button>
                 </div>
                 {view === 'receipts' && (
-                  <button className="primary_button" onClick={() => setEditingReceipt('new')}>
-                    <Plus size={16} /> Добавить квитанцию
-                  </button>
+                  <div className="receipt_actions_cluster">
+                    <button
+                      type="button"
+                      className="secondary_button sync_mydom_button"
+                      disabled={syncingMydom}
+                      title="Загрузить начисления и квитанцию из сервиса Мой дом"
+                      onClick={syncMydom}
+                    >
+                      <RefreshCw size={14} className={syncingMydom ? 'spin' : ''} />
+                      <span>{syncingMydom ? 'Синхронизация...' : '⚡ Мой дом'}</span>
+                    </button>
+                    <button className="primary_button" onClick={() => setEditingReceipt('new')}>
+                      <Plus size={16} /> Добавить квитанцию
+                    </button>
+                  </div>
                 )}
               </div>
             ) : (
@@ -2225,13 +2700,61 @@ export default function Dashboard({
                   </div>
                 </div>
                 <button
+                  type="button"
                   className="secondary_button"
-                  onClick={() => {
-                    setView('receipts');
-                    setEditingReceipt('new');
-                  }}
+                  onClick={() => setMydomModalOpen(true)}
                 >
-                  <Plus size={16} /> Квитанция Мой дом
+                  <Settings2 size={16} /> Настроить синхронизацию
+                </button>
+              </article>
+              <article className="connection_card isp_special">
+                <span className="provider_icon" style={{ background: '#ecfeff', color: '#0891b2' }}>
+                  <Wifi size={24} />
+                </span>
+                <div>
+                  <div className="connection_title">
+                    <h2>Интернет и ТВ (Homeline и др.)</h2>
+                    <span className="status_pill available">Партнёр Мой дом</span>
+                  </div>
+                  <p>
+                    Homeline — официальный интернет-партнёр платформы «Мой дом». Также
+                    поддерживаются Aknet, Megaline, Saima Telecom, FastNet и Кыргызтелеком. Счета
+                    можно вести отдельно или объединять в единую квитанцию квартиры.
+                  </p>
+                  <small>
+                    {internetSettings.account
+                      ? `Подключен: ${internetSettings.providerName} · Л/С: ${internetSettings.account} · ${internetSettings.tariff} с/мес`
+                      : 'Провайдер ещё не привязан к вашей квартире'}
+                  </small>
+                  <div className="connection_links">
+                    <a
+                      href={
+                        INTERNET_PROVIDERS.find((p) => p.id === internetSettings.providerId)?.url ||
+                        'https://homeline.kg'
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Сайт провайдера <ArrowUpRight size={14} />
+                    </a>
+                    <a
+                      href={
+                        INTERNET_PROVIDERS.find((p) => p.id === internetSettings.providerId)
+                          ?.cabinetUrl || 'https://bill.homeline.kg'
+                      }
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Личный кабинет <ArrowUpRight size={14} />
+                    </a>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="secondary_button"
+                  onClick={() => setInternetModalOpen(true)}
+                >
+                  <Settings2 size={16} /> Настроить интернет
                 </button>
               </article>
               <div className="inline_note">
@@ -2494,6 +3017,22 @@ export default function Dashboard({
           onClose={() => setViewingReceipt(null)}
         />
       )}
+      <MydomSettingsModal
+        open={mydomModalOpen}
+        settings={mydomSettings}
+        syncing={syncingMydom}
+        onClose={() => setMydomModalOpen(false)}
+        onChange={setMydomSettings}
+        onSync={syncMydom}
+      />
+      <InternetSettingsModal
+        open={internetModalOpen}
+        settings={internetSettings}
+        period={period}
+        onClose={() => setInternetModalOpen(false)}
+        onChange={setInternetSettings}
+        onCreateReceipt={createInternetReceipt}
+      />
       {notice && (
         <div className="toast" role="status">
           <Info size={18} />

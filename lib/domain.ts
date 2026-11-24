@@ -185,6 +185,7 @@ export const RECEIPT_CATEGORIES = [
   'heat',
   'gas',
   'electricity',
+  'internet',
   'other',
 ] as const;
 export type ReceiptCategory = (typeof RECEIPT_CATEGORIES)[number];
@@ -257,6 +258,12 @@ export const receiptCategories: Record<
     badge: 'Электроэнергия',
     color: '#9333ea',
   },
+  internet: {
+    name: 'Интернет и ТВ',
+    defaultTitle: 'Квитанция за интернет',
+    badge: 'Провайдер',
+    color: '#0891b2',
+  },
   other: {
     name: 'Прочая услуга',
     defaultTitle: 'Счёт на оплату',
@@ -264,6 +271,82 @@ export const receiptCategories: Record<
     color: '#64748b',
   },
 };
+
+export type InternetProviderInfo = {
+  id: string;
+  name: string;
+  company: string;
+  url: string;
+  cabinetUrl: string;
+  badge: string;
+  defaultTariff: string;
+  planName: string;
+  isMydomPartner?: boolean;
+};
+
+export const INTERNET_PROVIDERS: InternetProviderInfo[] = [
+  {
+    id: 'homeline',
+    name: 'Homeline (Хоумлайн)',
+    company: 'ОсОО «Хоумлайн»',
+    url: 'https://homeline.kg',
+    cabinetUrl: 'https://bill.homeline.kg',
+    badge: 'Партнёр «Мой дом»',
+    defaultTariff: '850.00',
+    planName: 'Стандарт (100 Мбит/с)',
+    isMydomPartner: true,
+  },
+  {
+    id: 'aknet',
+    name: 'Aknet (Акнет)',
+    company: 'ОсОО «Акнет» · i-TV',
+    url: 'https://aknet.kg',
+    cabinetUrl: 'https://cabinet.aknet.kg',
+    badge: 'Оптика / ТВ',
+    defaultTariff: '950.00',
+    planName: 'Комфорт (100 Мбит/с + ТВ)',
+  },
+  {
+    id: 'megaline',
+    name: 'Megaline (Мегалайн)',
+    company: 'ОсОО «Мега-Лайн»',
+    url: 'https://megaline.kg',
+    cabinetUrl: 'https://bill.megaline.kg',
+    badge: 'GPON',
+    defaultTariff: '890.00',
+    planName: 'Оптимальный (100 Мбит/с)',
+  },
+  {
+    id: 'saima',
+    name: 'Saima Telecom (Сайма)',
+    company: 'ЗАО «SAIMA TELECOM»',
+    url: 'https://saimatelecom.kg',
+    cabinetUrl: 'https://my.saima.kg',
+    badge: 'Интернет + ТВ',
+    defaultTariff: '800.00',
+    planName: 'Сайма 100 (100 Мбит/с)',
+  },
+  {
+    id: 'fastnet',
+    name: 'FastNet (Фастнет)',
+    company: 'ОсОО «Фастнет»',
+    url: 'https://fastnet.kg',
+    cabinetUrl: 'https://cabinet.fastnet.kg',
+    badge: 'Ethernet / Оптика',
+    defaultTariff: '790.00',
+    planName: 'Fast-100 (100 Мбит/с)',
+  },
+  {
+    id: 'kt',
+    name: 'Кыргызтелеком (Jet)',
+    company: 'ОАО «Кыргызтелеком»',
+    url: 'https://kt.kg',
+    cabinetUrl: 'https://cabinet.kt.kg',
+    badge: 'Госоператор',
+    defaultTariff: '750.00',
+    planName: 'Jet 100 (100 Мбит/с)',
+  },
+];
 
 export const MYDOM_DEFAULT_ITEMS: Array<{
   name: string;
@@ -279,6 +362,7 @@ export const MYDOM_DEFAULT_ITEMS: Array<{
   { name: 'Электроэнергия (НЭСК)', unit: 'кВт·ч', tariff: '1.37', volume: '160' },
   { name: 'Природный газ (Газпром)', unit: 'м³', tariff: '20.15', volume: '22' },
   { name: 'Домофон и видеонаблюдение', unit: 'мес.', tariff: '80.00', volume: '1' },
+  { name: 'Интернет Homeline (партнёр Мой дом)', unit: 'мес.', tariff: '850.00', volume: '1' },
 ];
 
 export function normalizeMoney(input: unknown): string {
