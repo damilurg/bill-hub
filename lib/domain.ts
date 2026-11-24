@@ -177,3 +177,192 @@ export function manualMessage(
 ): string {
   return `${providers[r.provider].company}\nЛицевой счёт: ${r.account}\nПериод: ${r.period}\n${r.values.map((v) => `${v.label}: ${v.value} ${v.unit}`).join('\n')}`;
 }
+
+export const RECEIPT_CATEGORIES = [
+  'mydom',
+  'tszh',
+  'water',
+  'heat',
+  'gas',
+  'electricity',
+  'other',
+] as const;
+export type ReceiptCategory = (typeof RECEIPT_CATEGORIES)[number];
+
+export type ReceiptItem = {
+  id: string;
+  name: string;
+  amount: string;
+  unit?: string;
+  volume?: string;
+  tariff?: string;
+};
+
+export type Receipt = {
+  id: string;
+  period: string;
+  category: ReceiptCategory;
+  title: string;
+  account: string;
+  amount: string;
+  paidAmount: string;
+  status: 'unpaid' | 'paid' | 'partial';
+  dueDate: string;
+  paidDate: string;
+  items: ReceiptItem[];
+  fileName: string;
+  fileData: string;
+  notes: string;
+  created?: string;
+  updated?: string;
+};
+
+export const receiptCategories: Record<
+  ReceiptCategory,
+  { name: string; defaultTitle: string; badge: string; color: string }
+> = {
+  mydom: {
+    name: 'Мой дом',
+    defaultTitle: 'Единая квитанция · Мой дом',
+    badge: 'Единая квитанция',
+    color: '#10b981',
+  },
+  tszh: {
+    name: 'ТСЖ / УК',
+    defaultTitle: 'Квитанция ТСЖ',
+    badge: 'Управление домом',
+    color: '#6366f1',
+  },
+  water: {
+    name: 'Бишкекводоканал',
+    defaultTitle: 'Квитанция за воду и стоки',
+    badge: 'ХВС / ГВС',
+    color: '#0284c7',
+  },
+  heat: {
+    name: 'Бишкектеплосеть',
+    defaultTitle: 'Квитанция за отопление',
+    badge: 'Отопление',
+    color: '#ea580c',
+  },
+  gas: {
+    name: 'Газпром Кыргызстан',
+    defaultTitle: 'Квитанция за газ',
+    badge: 'Газ',
+    color: '#d97706',
+  },
+  electricity: {
+    name: 'НЭСК · Свет',
+    defaultTitle: 'Квитанция за электроэнергию',
+    badge: 'Электроэнергия',
+    color: '#9333ea',
+  },
+  other: {
+    name: 'Прочая услуга',
+    defaultTitle: 'Счёт на оплату',
+    badge: 'Квитанция',
+    color: '#64748b',
+  },
+};
+
+export const MYDOM_DEFAULT_ITEMS: Array<{
+  name: string;
+  unit?: string;
+  tariff?: string;
+  volume?: string;
+}> = [
+  { name: 'Содержание дома / ТСЖ', unit: 'м²', tariff: '25.00', volume: '65' },
+  { name: 'Обслуживание лифта', unit: 'мес.', tariff: '200.00', volume: '1' },
+  { name: 'Вывоз ТБО (Тазалык)', unit: 'чел.', tariff: '45.00', volume: '3' },
+  { name: 'Холодное водоснабжение и стоки', unit: 'м³', tariff: '15.40', volume: '14' },
+  { name: 'Горячее водоснабжение и отопление', unit: 'м³', tariff: '89.50', volume: '6' },
+  { name: 'Электроэнергия (НЭСК)', unit: 'кВт·ч', tariff: '1.37', volume: '160' },
+  { name: 'Природный газ (Газпром)', unit: 'м³', tariff: '20.15', volume: '22' },
+  { name: 'Домофон и видеонаблюдение', unit: 'мес.', tariff: '80.00', volume: '1' },
+];
+
+export function normalizeMoney(input: unknown): string {
+  if (input === '' || input === undefined || input === null) return '0.00';
+  const s = String(input).trim().replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(s))
+    throw new ValidationError('Введите корректную сумму в сомах (например, 1450.50).');
+  const num = Number(s);
+  if (!Number.isFinite(num) || num < 0 || num > 10_000_000)
+    throw new ValidationError('Сумма должна быть в пределах от 0 до 10 000 000 сом.');
+  return num.toFixed(2);
+}
+
+export function validateReceipt(input: unknown): Receipt {
+  if (!input || typeof input !== 'object') throw new ValidationError('Проверьте данные квитанции.');
+  const r = input as Record<string, unknown>;
+  const id = String(r.id || crypto.randomUUID()).trim();
+  const period = validatePeriod(r.period);
+  const cat = String(r.category || 'mydom') as ReceiptCategory;
+  if (!RECEIPT_CATEGORIES.includes(cat))
+    throw new ValidationError('Неизвестная категория квитанции.');
+  const title = String(r.title || receiptCategories[cat].defaultTitle)
+    .trim()
+    .slice(0, 120);
+  if (!title) throw new ValidationError('Укажите название квитанции.');
+  const account = String(r.account || '')
+    .trim()
+    .slice(0, 40);
+  const amount = normalizeMoney(r.amount);
+  const paidAmount = normalizeMoney(r.paidAmount);
+  let status = String(r.status || 'unpaid');
+  if (!['unpaid', 'paid', 'partial'].includes(status)) status = 'unpaid';
+  if (Number(paidAmount) >= Number(amount) && Number(amount) > 0) {
+    status = 'paid';
+  } else if (Number(paidAmount) > 0 && Number(paidAmount) < Number(amount)) {
+    status = 'partial';
+  }
+  const dueDate = String(r.dueDate || '')
+    .trim()
+    .slice(0, 10);
+  const paidDate = String(r.paidDate || '')
+    .trim()
+    .slice(0, 10);
+  const fileName = String(r.fileName || '')
+    .trim()
+    .slice(0, 120);
+  const fileData = typeof r.fileData === 'string' ? r.fileData : '';
+  const notes = String(r.notes || '')
+    .trim()
+    .slice(0, 500);
+
+  let items: ReceiptItem[] = [];
+  if (Array.isArray(r.items)) {
+    items = r.items.slice(0, 40).map((it, idx) => {
+      const item = (it || {}) as Record<string, unknown>;
+      return {
+        id: String(item.id || 'item_' + (idx + 1)),
+        name: String(item.name || 'Услуга')
+          .trim()
+          .slice(0, 100),
+        amount: normalizeMoney(item.amount),
+        unit: item.unit ? String(item.unit).trim().slice(0, 20) : undefined,
+        volume: item.volume ? String(item.volume).trim().slice(0, 20) : undefined,
+        tariff: item.tariff ? String(item.tariff).trim().slice(0, 20) : undefined,
+      };
+    });
+  }
+
+  return {
+    id,
+    period,
+    category: cat,
+    title,
+    account,
+    amount,
+    paidAmount,
+    status: status as Receipt['status'],
+    dueDate,
+    paidDate,
+    items,
+    fileName,
+    fileData,
+    notes,
+    created: typeof r.created === 'string' ? r.created : undefined,
+    updated: typeof r.updated === 'string' ? r.updated : undefined,
+  };
+}

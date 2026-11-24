@@ -92,20 +92,28 @@ globalThis.fetch = async (url, options) => {
 const routes = {
   accounts: await import('../app/api/accounts/route.ts'),
   readings: await import('../app/api/readings/route.ts'),
+  receipts: await import('../app/api/receipts/route.ts'),
   state: await import('../app/api/state/route.ts'),
   submit: await import('../app/api/submit/route.ts'),
   export: await import('../app/api/export/route.ts'),
 };
-async function request(route, body, user = 'alice', origin = 'https://app.test') {
+async function request(
+  route,
+  body,
+  user = 'alice',
+  origin = 'https://app.test',
+  method = undefined,
+) {
   const headers = { 'Content-Type': 'application/json', Origin: origin };
   if (user === 'alice') headers.cookie = testCookie();
   else if (user) headers['oai-authenticated-user-id'] = user;
+  const m = method || (body === undefined ? 'GET' : 'POST');
   const req = new Request('https://app.test/api/' + route, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: m,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  const res = await routes[route][body === undefined ? 'GET' : 'POST'](req);
+  const res = await routes[route][m](req);
   const raw = await res.text();
   let data;
   try {
@@ -138,7 +146,9 @@ async function gasDraft() {
 }
 const send = (r) => request('submit', { id: r.id, version: r.created, confirmed: true });
 beforeEach(() => {
-  sqlite.exec('DELETE FROM utility_readings; DELETE FROM utility_accounts;');
+  sqlite.exec(
+    'DELETE FROM utility_readings; DELETE FROM utility_accounts; DELETE FROM utility_receipts;',
+  );
   posts = 0;
   behavior = 'ok';
   clock = '2026-10-22T12:00:00Z';
@@ -279,4 +289,60 @@ test('routes: server switch blocks real submissions before provider access', asy
   assert.equal((await send(r)).status, 422);
   assert.equal(posts, 0);
   assert.equal((await request('state')).data.readings[0].status, 'draft');
+});
+
+test('routes: receipt CRUD and state synchronization', async () => {
+  const receipt = {
+    period: '2026-10',
+    category: 'mydom',
+    title: 'Единая квитанция · Мой дом',
+    account: '3180429',
+    amount: '2985.60',
+    paidAmount: '0.00',
+    status: 'unpaid',
+    dueDate: '2026-11-25',
+    paidDate: '',
+    items: [
+      { id: '1', name: 'Обслуживание дома', amount: '1625.00' },
+      { id: '2', name: 'Лифт', amount: '220.00' },
+    ],
+    fileName: 'bill.pdf',
+    fileData: 'data:application/pdf;base64,JVBERi0=',
+    notes: 'Тестовая квитанция',
+  };
+
+  // POST create receipt
+  const res = await request('receipts', receipt);
+  assert.equal(res.status, 200);
+  assert.equal(res.data.ok, true);
+  assert.equal(res.data.receipt.title, 'Единая квитанция · Мой дом');
+
+  // Verify in state
+  const state = await request('state');
+  assert.equal(state.data.receipts.length, 1);
+  const saved = state.data.receipts[0];
+  assert.equal(saved.account, '3180429');
+  assert.equal(saved.amount, '2985.60');
+  assert.equal(saved.items.length, 2);
+
+  // Update receipt (mark as paid)
+  const updateRes = await request('receipts', {
+    ...receipt,
+    id: saved.id,
+    paidAmount: '2985.60',
+    paidDate: '2026-11-20',
+  });
+  assert.equal(updateRes.status, 200);
+  assert.equal(updateRes.data.receipt.status, 'paid');
+
+  // Verify updated status in state
+  const stateAfterUpdate = await request('state');
+  assert.equal(stateAfterUpdate.data.receipts[0].status, 'paid');
+
+  // DELETE receipt
+  const delRes = await request('receipts', { id: saved.id }, 'alice', undefined, 'DELETE');
+  assert.equal(delRes.status, 200);
+
+  const stateAfterDel = await request('state');
+  assert.equal(stateAfterDel.data.receipts.length, 0);
 });

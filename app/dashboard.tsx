@@ -26,6 +26,13 @@ import {
   CalendarDays,
   HelpCircle,
   LockKeyhole,
+  Receipt as ReceiptIcon,
+  FileText,
+  Upload,
+  Trash2,
+  Eye,
+  Sparkles,
+  Building2,
 } from 'lucide-react';
 import {
   PROVIDERS,
@@ -38,6 +45,13 @@ import {
   type Meter,
   type ProviderId,
   type Reading,
+  type Receipt,
+  type ReceiptItem,
+  type ReceiptCategory,
+  receiptCategories,
+  MYDOM_DEFAULT_ITEMS,
+  RECEIPT_CATEGORIES,
+  validateReceipt,
 } from '@/lib/domain';
 const icons = { water: Droplets, heat: Waves, gas: Flame, electricity: Zap };
 const statusLabels: Record<string, string> = {
@@ -265,6 +279,530 @@ function AccountModal({
   );
 }
 
+function ReceiptModal({
+  existing,
+  defaultPeriod,
+  onSave,
+  onClose,
+}: {
+  existing?: Receipt | null;
+  defaultPeriod: string;
+  onSave: (r: Receipt) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [category, setCategory] = useState<ReceiptCategory>(existing?.category || 'mydom');
+  const [title, setTitle] = useState(
+    existing?.title || receiptCategories[existing?.category || 'mydom'].defaultTitle,
+  );
+  const [account, setAccount] = useState(existing?.account || '');
+  const [period, setPeriod] = useState(existing?.period || defaultPeriod);
+  const [amount, setAmount] = useState(existing?.amount || '');
+  const [paidAmount, setPaidAmount] = useState(existing?.paidAmount || '0.00');
+  const [status, setStatus] = useState<Receipt['status']>(existing?.status || 'unpaid');
+  const [dueDate, setDueDate] = useState(existing?.dueDate || `${defaultPeriod}-25`);
+  const [paidDate, setPaidDate] = useState(existing?.paidDate || '');
+  const [notes, setNotes] = useState(existing?.notes || '');
+  const [fileName, setFileName] = useState(existing?.fileName || '');
+  const [fileData, setFileData] = useState(existing?.fileData || '');
+  const [items, setItems] = useState<ReceiptItem[]>(
+    existing?.items?.length
+      ? existing.items
+      : (existing?.category || category) === 'mydom'
+        ? MYDOM_DEFAULT_ITEMS.map((it, i) => ({
+            id: 'item_' + (i + 1),
+            name: it.name,
+            amount: (Number(it.tariff || 0) * Number(it.volume || 1)).toFixed(2),
+            unit: it.unit,
+            volume: it.volume,
+            tariff: it.tariff,
+          }))
+        : [],
+  );
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  function recalculateTotal(newItems: ReceiptItem[]) {
+    const sum = newItems.reduce((acc, it) => acc + (Number(it.amount) || 0), 0);
+    if (sum > 0) setAmount(sum.toFixed(2));
+  }
+
+  function applyMydomTemplate() {
+    const templateItems: ReceiptItem[] = MYDOM_DEFAULT_ITEMS.map((it, i) => ({
+      id: 'item_' + (i + 1),
+      name: it.name,
+      amount: (Number(it.tariff || 0) * Number(it.volume || 1)).toFixed(2),
+      unit: it.unit,
+      volume: it.volume,
+      tariff: it.tariff,
+    }));
+    setItems(templateItems);
+    setCategory('mydom');
+    setTitle('Единая квитанция · Мой дом');
+    recalculateTotal(templateItems);
+  }
+
+  function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setError('Файл квитанции не должен превышать 2 МБ.');
+      return;
+    }
+    setError('');
+    setFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFileData(typeof reader.result === 'string' ? reader.result : '');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSaving(true);
+    try {
+      const calculatedAmount =
+        amount ||
+        (items.length
+          ? items.reduce((s, it) => s + (Number(it.amount) || 0), 0).toFixed(2)
+          : '0.00');
+      const payload = validateReceipt({
+        id: existing?.id,
+        period,
+        category,
+        title,
+        account,
+        amount: calculatedAmount,
+        paidAmount,
+        status,
+        dueDate,
+        paidDate: status === 'paid' && !paidDate ? new Date().toISOString().slice(0, 10) : paidDate,
+        items,
+        fileName,
+        fileData,
+        notes,
+        created: existing?.created,
+      });
+      await onSave(payload);
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={existing ? 'Редактировать квитанцию' : 'Добавить квитанцию'} onClose={onClose}>
+      <form onSubmit={handleSubmit} className="receipt_form">
+        <div className="receipt_category_picker">
+          <label className="form_label">Категория квитанции</label>
+          <div className="category_chips">
+            {RECEIPT_CATEGORIES.map((cat) => (
+              <button
+                type="button"
+                key={cat}
+                className={'category_chip' + (category === cat ? ' active' : '')}
+                onClick={() => {
+                  setCategory(cat);
+                  if (!existing) setTitle(receiptCategories[cat].defaultTitle);
+                }}
+              >
+                {receiptCategories[cat].name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="form_row_grid">
+          <div>
+            <label className="form_label" htmlFor="receipt_title">
+              Название
+            </label>
+            <input
+              id="receipt_title"
+              value={title}
+              maxLength={120}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="form_label" htmlFor="receipt_account">
+              Лицевой счёт
+            </label>
+            <input
+              id="receipt_account"
+              placeholder="Например, 3180429"
+              value={account}
+              maxLength={40}
+              onChange={(e) => setAccount(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form_row_grid three_col">
+          <div>
+            <label className="form_label" htmlFor="receipt_period">
+              Месяц
+            </label>
+            <input
+              id="receipt_period"
+              type="month"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="form_label" htmlFor="receipt_due_date">
+              Оплатить до
+            </label>
+            <input
+              id="receipt_due_date"
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="form_label" htmlFor="receipt_status">
+              Статус оплаты
+            </label>
+            <select
+              id="receipt_status"
+              value={status}
+              onChange={(e) => {
+                const newStatus = e.target.value as Receipt['status'];
+                setStatus(newStatus);
+                if (newStatus === 'paid' && (!paidAmount || paidAmount === '0.00')) {
+                  setPaidAmount(amount);
+                }
+              }}
+            >
+              <option value="unpaid">Ожидает оплаты</option>
+              <option value="paid">Оплачено полностью</option>
+              <option value="partial">Частично оплачено</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="form_row_grid">
+          <div>
+            <label className="form_label" htmlFor="receipt_amount">
+              Итого к оплате (сом)
+            </label>
+            <input
+              id="receipt_amount"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="form_label" htmlFor="receipt_paid_amount">
+              Оплачено (сом)
+            </label>
+            <input
+              id="receipt_paid_amount"
+              inputMode="decimal"
+              placeholder="0.00"
+              value={paidAmount}
+              onChange={(e) => setPaidAmount(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="receipt_items_section">
+          <div className="receipt_items_header">
+            <h4>Статьи начислений ({items.length})</h4>
+            <div className="receipt_items_actions">
+              <button type="button" className="text_button" onClick={applyMydomTemplate}>
+                <Sparkles size={14} /> Шаблон «Мой дом»
+              </button>
+              <button
+                type="button"
+                className="text_button"
+                onClick={() => {
+                  const newItems = [
+                    ...items,
+                    { id: 'item_' + (items.length + 1), name: '', amount: '0.00' },
+                  ];
+                  setItems(newItems);
+                }}
+              >
+                <Plus size={14} /> Добавить строку
+              </button>
+            </div>
+          </div>
+
+          <div className="receipt_items_list">
+            {items.map((it, idx) => (
+              <div className="receipt_item_row" key={it.id || idx}>
+                <input
+                  placeholder="Статья (напр., Лифт)"
+                  value={it.name}
+                  className="item_name_input"
+                  onChange={(e) => {
+                    const updated = items.map((x, j) =>
+                      j === idx ? { ...x, name: e.target.value } : x,
+                    );
+                    setItems(updated);
+                  }}
+                />
+                <input
+                  placeholder="Сумма"
+                  value={it.amount}
+                  className="item_amount_input"
+                  inputMode="decimal"
+                  onChange={(e) => {
+                    const updated = items.map((x, j) =>
+                      j === idx ? { ...x, amount: e.target.value } : x,
+                    );
+                    setItems(updated);
+                    recalculateTotal(updated);
+                  }}
+                />
+                <button
+                  type="button"
+                  className="icon_button danger_icon"
+                  onClick={() => {
+                    const updated = items.filter((_, j) => j !== idx);
+                    setItems(updated);
+                    recalculateTotal(updated);
+                  }}
+                  aria-label="Удалить строку"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="receipt_attachment_box">
+          <label className="form_label">Прикрепить файл (PDF или фото квитанции)</label>
+          <div className="file_upload_row">
+            <input
+              type="file"
+              id="receipt_file_input"
+              accept=".pdf,image/*"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+            />
+            <label htmlFor="receipt_file_input" className="secondary_button upload_label_btn">
+              <Upload size={15} /> {fileName ? 'Заменить файл' : 'Загрузить файл / скан'}
+            </label>
+            {fileName && (
+              <div className="attached_file_badge">
+                <FileText size={15} />
+                <span>{fileName}</span>
+                <button
+                  type="button"
+                  className="icon_button"
+                  onClick={() => {
+                    setFileName('');
+                    setFileData('');
+                  }}
+                  aria-label="Удалить файл"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div>
+          <label className="form_label" htmlFor="receipt_notes">
+            Примечания
+          </label>
+          <input
+            id="receipt_notes"
+            placeholder="Номер чека, комментарий, подробности..."
+            value={notes}
+            maxLength={200}
+            onChange={(e) => setNotes(e.target.value)}
+          />
+        </div>
+
+        {error && <p className="error">{error}</p>}
+
+        <div className="modal_actions">
+          <button type="button" className="secondary_button" onClick={onClose}>
+            Отмена
+          </button>
+          <button className="primary_button" disabled={saving}>
+            {saving ? <LoaderCircle size={17} className="spin" /> : <Check size={17} />} Сохранить
+            квитанцию
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function ReceiptViewModal({
+  receipt,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  receipt: Receipt;
+  onEdit: () => void;
+  onDelete: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const cat = receiptCategories[receipt.category] || receiptCategories.other;
+
+  return (
+    <Modal title={receipt.title} onClose={onClose}>
+      <div className="receipt_view_modal">
+        <div className="receipt_view_topbar">
+          <span
+            className="receipt_category_badge"
+            style={{ backgroundColor: cat.color + '18', color: cat.color }}
+          >
+            {cat.name}
+          </span>
+          <span className={'receipt_status_pill ' + receipt.status}>
+            {receipt.status === 'paid'
+              ? 'Оплачено'
+              : receipt.status === 'partial'
+                ? 'Частично'
+                : 'Ожидает оплаты'}
+          </span>
+        </div>
+
+        <div className="receipt_view_kpis">
+          <div className="receipt_kpi_card">
+            <small>К оплате</small>
+            <strong>{receipt.amount} сом</strong>
+          </div>
+          <div className="receipt_kpi_card">
+            <small>Оплачено</small>
+            <strong className="green_text">{receipt.paidAmount} сом</strong>
+          </div>
+          <div className="receipt_kpi_card">
+            <small>Лицевой счёт</small>
+            <strong>{receipt.account || '—'}</strong>
+          </div>
+        </div>
+
+        {receipt.dueDate && (
+          <p className="receipt_due_info">
+            <CalendarDays size={15} /> Срок оплаты: до {receipt.dueDate}
+            {receipt.paidDate && ` · Оплачено: ${receipt.paidDate}`}
+          </p>
+        )}
+
+        {receipt.fileData && (
+          <div className="receipt_file_preview_box">
+            <div className="receipt_file_header">
+              <div className="receipt_file_info">
+                <FileText size={18} />
+                <span>{receipt.fileName || 'Квитанция'}</span>
+              </div>
+              <a
+                href={receipt.fileData}
+                download={receipt.fileName || 'receipt.pdf'}
+                className="secondary_button small_btn"
+              >
+                <Download size={14} /> Скачать
+              </a>
+            </div>
+            {receipt.fileData.startsWith('data:image/') ? (
+              <img
+                src={receipt.fileData}
+                alt={receipt.fileName}
+                className="receipt_image_preview"
+              />
+            ) : receipt.fileData.startsWith('data:application/pdf') ? (
+              <iframe
+                src={receipt.fileData}
+                title={receipt.fileName}
+                className="receipt_pdf_frame"
+              />
+            ) : null}
+          </div>
+        )}
+
+        {receipt.items && receipt.items.length > 0 && (
+          <div className="receipt_view_items">
+            <h4>Расшифровка начислений</h4>
+            <table className="receipt_table">
+              <thead>
+                <tr>
+                  <th>Услуга / Статья</th>
+                  <th>Объём</th>
+                  <th>Тариф</th>
+                  <th style={{ textAlign: 'right' }}>Сумма</th>
+                </tr>
+              </thead>
+              <tbody>
+                {receipt.items.map((it, idx) => (
+                  <tr key={it.id || idx}>
+                    <td>{it.name}</td>
+                    <td>{it.volume ? `${it.volume} ${it.unit || ''}` : '—'}</td>
+                    <td>{it.tariff ? `${it.tariff} сом` : '—'}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{it.amount} сом</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {receipt.notes && (
+          <div className="receipt_notes_box">
+            <Info size={16} />
+            <p>{receipt.notes}</p>
+          </div>
+        )}
+
+        <div className="modal_actions">
+          <button
+            type="button"
+            className="secondary_button danger_text"
+            disabled={deleting}
+            onClick={async () => {
+              if (!confirm('Удалить эту квитанцию?')) return;
+              setDeleting(true);
+              try {
+                await onDelete();
+                onClose();
+              } finally {
+                setDeleting(false);
+              }
+            }}
+          >
+            <Trash2 size={16} /> Удалить
+          </button>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              className="secondary_button"
+              onClick={() => {
+                onClose();
+                onEdit();
+              }}
+            >
+              <Settings2 size={16} /> Редактировать
+            </button>
+            <button type="button" className="primary_button" onClick={onClose}>
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 const METER_SPECS: Record<ProviderId, string> = {
   water: 'СВК-15 · КЛАСС B · Qn 1.5 m³/h',
   gas: 'G-4 · ТАХИОМЕТРИЧЕСКИЙ · PN 0.05',
@@ -482,10 +1020,14 @@ export default function Dashboard({
   authenticated: boolean;
   liveEnabled: boolean;
 }) {
-  const [view, setView] = useState<'readings' | 'history' | 'connections'>('readings'),
+  const [view, setView] = useState<'readings' | 'receipts' | 'history' | 'connections'>('readings'),
     [period, setPeriod] = useState(bishkekPeriod()),
     [accounts, setAccounts] = useState<Account[]>([]),
     [readings, setReadings] = useState<Reading[]>([]),
+    [receipts, setReceipts] = useState<Receipt[]>([]),
+    [editingReceipt, setEditingReceipt] = useState<Receipt | null | 'new'>(null),
+    [viewingReceipt, setViewingReceipt] = useState<Receipt | null>(null),
+    [receiptFilter, setReceiptFilter] = useState<'all' | 'unpaid' | 'paid'>('all'),
     [values, setValues] = useState<Record<string, Record<string, string>>>({}),
     [editing, setEditing] = useState<ProviderId | null>(null),
     [demo, setDemo] = useState(false),
@@ -497,12 +1039,23 @@ export default function Dashboard({
     [filter, setFilter] = useState('all');
   const active = readings.filter((r) => r.period === period),
     saved = active.length,
-    confirmed = active.filter((r) => r.status === 'confirmed').length;
+    confirmed = active.filter((r) => r.status === 'confirmed').length,
+    monthlyReceipts = receipts.filter((r) => r.period === period),
+    unpaidCount = receipts.filter((r) => r.status === 'unpaid').length,
+    totalInvoiced = monthlyReceipts.reduce((sum, r) => sum + (Number(r.amount) || 0), 0),
+    totalPaid = monthlyReceipts.reduce((sum, r) => sum + (Number(r.paidAmount) || 0), 0),
+    totalRemaining = Math.max(0, totalInvoiced - totalPaid),
+    filteredReceipts = monthlyReceipts.filter((r) => {
+      if (receiptFilter === 'unpaid') return r.status === 'unpaid' || r.status === 'partial';
+      if (receiptFilter === 'paid') return r.status === 'paid';
+      return true;
+    });
   async function reload() {
     if (!authenticated) return;
     const d = await api('state');
     setAccounts(d.accounts);
     setReadings(d.readings);
+    setReceipts(d.receipts || []);
   }
   useEffect(() => {
     if (authenticated) reload().catch((e) => setNotice(e.message));
@@ -543,12 +1096,114 @@ export default function Dashboard({
         ],
       })),
     );
+    const demoReceipts: Receipt[] = [
+      {
+        id: 'demo_mydom_1',
+        period: bishkekPeriod(),
+        category: 'mydom',
+        title: 'Единая квитанция · Мой дом',
+        account: '3180429',
+        amount: '2985.60',
+        paidAmount: '0.00',
+        status: 'unpaid',
+        dueDate: bishkekPeriod() + '-25',
+        paidDate: '',
+        fileName: 'mydom_receipt_2026.pdf',
+        fileData: '',
+        notes: 'ТСЖ «Южные Ворота», кв. 42. Включены городские службы и расходы дома.',
+        items: [
+          {
+            id: '1',
+            name: 'Техническое обслуживание дома',
+            amount: '1625.00',
+            unit: 'м²',
+            volume: '65',
+            tariff: '25.00',
+          },
+          {
+            id: '2',
+            name: 'Обслуживание пассажирского лифта',
+            amount: '220.00',
+            unit: 'мес.',
+            volume: '1',
+            tariff: '220.00',
+          },
+          {
+            id: '3',
+            name: 'Вывоз ТБО (МП «Тазалык»)',
+            amount: '135.00',
+            unit: 'чел.',
+            volume: '3',
+            tariff: '45.00',
+          },
+          {
+            id: '4',
+            name: 'Холодное водоснабжение и стоки',
+            amount: '215.60',
+            unit: 'м³',
+            volume: '14',
+            tariff: '15.40',
+          },
+          {
+            id: '5',
+            name: 'Горячее водоснабжение и подогрев',
+            amount: '480.00',
+            unit: 'м³',
+            volume: '6',
+            tariff: '80.00',
+          },
+          {
+            id: '6',
+            name: 'Домофонная связь',
+            amount: '80.00',
+            unit: 'мес.',
+            volume: '1',
+            tariff: '80.00',
+          },
+          {
+            id: '7',
+            name: 'Охрана и видеонаблюдение территории',
+            amount: '230.00',
+            unit: 'мес.',
+            volume: '1',
+            tariff: '230.00',
+          },
+        ],
+      },
+      {
+        id: 'demo_gas_1',
+        period: bishkekPeriod(),
+        category: 'gas',
+        title: 'Газпром Кыргызстан',
+        account: '000000001',
+        amount: '443.30',
+        paidAmount: '443.30',
+        status: 'paid',
+        dueDate: bishkekPeriod() + '-30',
+        paidDate: bishkekPeriod() + '-18',
+        fileName: 'gazprom_receipt.pdf',
+        fileData: '',
+        notes: 'Оплачено через MBANK QR.',
+        items: [
+          {
+            id: 'g1',
+            name: 'Природный газ (счётчик)',
+            amount: '443.30',
+            unit: 'м³',
+            volume: '22',
+            tariff: '20.15',
+          },
+        ],
+      },
+    ];
+    setReceipts(demoReceipts);
     setNotice('Пример: данные вымышленные, запросы поставщикам отключены.');
   }
   async function exitDemo() {
     setDemo(false);
     setAccounts([]);
     setReadings([]);
+    setReceipts([]);
     setValues({});
     if (authenticated)
       try {
@@ -556,6 +1211,50 @@ export default function Dashboard({
       } catch (e) {
         setNotice((e as Error).message);
       }
+  }
+  async function saveReceipt(r: Receipt) {
+    if (demo) {
+      setReceipts((rs) => {
+        const idx = rs.findIndex((x) => x.id === r.id);
+        return idx >= 0 ? rs.map((x, i) => (i === idx ? r : x)) : [r, ...rs];
+      });
+      setNotice('Квитанция сохранена.');
+      return;
+    }
+    await api('receipts', r);
+    await reload();
+    setNotice('Квитанция успешно сохранена в архиве.');
+  }
+  async function deleteReceipt(id: string) {
+    if (demo) {
+      setReceipts((rs) => rs.filter((x) => x.id !== id));
+      setNotice('Квитанция удалена.');
+      return;
+    }
+    await fetch('/api/receipts', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    });
+    await reload();
+    setNotice('Квитанция удалена.');
+  }
+  async function toggleReceiptPaid(r: Receipt) {
+    const isNowPaid = r.status !== 'paid';
+    const updated: Receipt = {
+      ...r,
+      status: isNowPaid ? 'paid' : 'unpaid',
+      paidAmount: isNowPaid ? r.amount : '0.00',
+      paidDate: isNowPaid ? new Date().toISOString().slice(0, 10) : '',
+    };
+    if (demo) {
+      setReceipts((rs) => rs.map((x) => (x.id === r.id ? updated : x)));
+      setNotice(isNowPaid ? 'Квитанция отмечена оплаченной.' : 'Статус изменён на: к оплате.');
+      return;
+    }
+    await api('receipts', updated);
+    await reload();
+    setNotice(isNowPaid ? 'Квитанция отмечена оплаченной.' : 'Статус изменён на: к оплате.');
   }
   async function saveAccount(a: Account) {
     if (demo) {
@@ -728,6 +1427,7 @@ export default function Dashboard({
           {(
             [
               { id: 'readings', label: 'Показания', icon: LayoutGrid },
+              { id: 'receipts', label: 'Квитанции', icon: ReceiptIcon },
               { id: 'history', label: 'История', icon: History },
               { id: 'connections', label: 'Подключения', icon: Link2 },
             ] as const
@@ -740,6 +1440,9 @@ export default function Dashboard({
             >
               <n.icon size={19} />
               {n.label}
+              {n.id === 'receipts' && unpaidCount > 0 && (
+                <span className="nav_count warning">{unpaidCount}</span>
+              )}
               {n.id === 'connections' && <span className="nav_count">4</span>}
             </button>
           ))}
@@ -771,7 +1474,13 @@ export default function Dashboard({
             <span>Мой дом</span>
             <span>/</span>
             <strong>
-              {view === 'readings' ? 'Показания' : view === 'history' ? 'История' : 'Подключения'}
+              {view === 'readings'
+                ? 'Показания'
+                : view === 'receipts'
+                  ? 'Квитанции'
+                  : view === 'history'
+                    ? 'История'
+                    : 'Подключения'}
             </strong>
           </div>
           <div className="topbar_right">
@@ -828,6 +1537,11 @@ export default function Dashboard({
                     Показания.
                     <br className="mobile_break" /> В одном месте.
                   </>
+                ) : view === 'receipts' ? (
+                  <>
+                    Квитанции.
+                    <br className="mobile_break" /> Единый архив счетов.
+                  </>
                 ) : view === 'history' ? (
                   'Всё осталось в истории.'
                 ) : (
@@ -837,30 +1551,39 @@ export default function Dashboard({
               <p>
                 {view === 'readings'
                   ? 'Вода, тепло, газ и свет. Меньше вкладок, больше спокойствия.'
-                  : view === 'history'
-                    ? 'Ваши черновики, ответы поставщиков и сохранённые показания.'
-                    : 'Добавьте лицевые счета и проверьте, как передаются показания.'}
+                  : view === 'receipts'
+                    ? 'Единая квитанция «Мой дом», ТСЖ и городские службы. Учёт начислений и сверка со счётчиками.'
+                    : view === 'history'
+                      ? 'Ваши черновики, ответы поставщиков и сохранённые показания.'
+                      : 'Добавьте лицевые счета и проверьте, как передаются показания.'}
               </p>
             </div>
-            {view === 'readings' ? (
-              <div className="month_switch">
-                <button
-                  className="icon_button"
-                  aria-label="Предыдущий месяц"
-                  onClick={() => setPeriod(shiftMonth(period, -1))}
-                >
-                  <ChevronLeft size={17} />
-                </button>
-                <CalendarDays size={16} />
-                <span>{monthLabel(period)}</span>
-                <button
-                  className="icon_button"
-                  aria-label="Следующий месяц"
-                  disabled={period >= bishkekPeriod()}
-                  onClick={() => setPeriod(shiftMonth(period, 1))}
-                >
-                  <ChevronRight size={17} />
-                </button>
+            {view === 'readings' || view === 'receipts' ? (
+              <div className="heading_controls_cluster">
+                <div className="month_switch">
+                  <button
+                    className="icon_button"
+                    aria-label="Предыдущий месяц"
+                    onClick={() => setPeriod(shiftMonth(period, -1))}
+                  >
+                    <ChevronLeft size={17} />
+                  </button>
+                  <CalendarDays size={16} />
+                  <span>{monthLabel(period)}</span>
+                  <button
+                    className="icon_button"
+                    aria-label="Следующий месяц"
+                    disabled={period >= bishkekPeriod()}
+                    onClick={() => setPeriod(shiftMonth(period, 1))}
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
+                {view === 'receipts' && (
+                  <button className="primary_button" onClick={() => setEditingReceipt('new')}>
+                    <Plus size={16} /> Добавить квитанцию
+                  </button>
+                )}
               </div>
             ) : (
               <a
@@ -1159,6 +1882,259 @@ export default function Dashboard({
               </div>
             </>
           )}
+          {view === 'receipts' && (
+            <section className="receipts_section">
+              <div className="receipts_overview">
+                <div className="receipt_kpi_card">
+                  <div className="kpi_top">
+                    <span className="stat_icon">
+                      <ReceiptIcon size={18} />
+                    </span>
+                    <small>Всего начислено</small>
+                  </div>
+                  <strong>
+                    {totalInvoiced.toLocaleString('ru-RU', { minimumFractionDigits: 2 })}{' '}
+                    <span>сом</span>
+                  </strong>
+                </div>
+
+                <div className="receipt_kpi_card">
+                  <div className="kpi_top">
+                    <span className="stat_icon green">
+                      <CheckCircle2 size={18} />
+                    </span>
+                    <small>Оплачено</small>
+                  </div>
+                  <strong className="green_text">
+                    {totalPaid.toLocaleString('ru-RU', { minimumFractionDigits: 2 })}{' '}
+                    <span>сом</span>
+                  </strong>
+                </div>
+
+                <div className="receipt_kpi_card">
+                  <div className="kpi_top">
+                    <span className={'stat_icon ' + (totalRemaining > 0 ? 'orange' : 'green')}>
+                      <CalendarDays size={18} />
+                    </span>
+                    <small>Остаток к оплате</small>
+                  </div>
+                  <strong className={totalRemaining > 0 ? 'orange_text' : 'green_text'}>
+                    {totalRemaining.toLocaleString('ru-RU', { minimumFractionDigits: 2 })}{' '}
+                    <span>сом</span>
+                  </strong>
+                </div>
+
+                <div className="receipt_kpi_card">
+                  <div className="kpi_top">
+                    <span className="stat_icon">
+                      <Building2 size={18} />
+                    </span>
+                    <small>В архиве за месяц</small>
+                  </div>
+                  <strong>
+                    {monthlyReceipts.length}
+                    <span> квитанций</span>
+                  </strong>
+                </div>
+              </div>
+
+              {active.length > 0 && (
+                <div className="receipt_crosscheck_banner">
+                  <div className="crosscheck_icon">
+                    <Sparkles size={20} />
+                  </div>
+                  <div className="crosscheck_content">
+                    <strong>Сверка с переданными показаниями приборов учёта</strong>
+                    <p>
+                      За {monthLabel(period)} в Bill-Hub зафиксированы показания:{' '}
+                      {active
+                        .flatMap((r) => r.values)
+                        .map((v) => `${v.label}: ${v.value} ${v.unit}`)
+                        .join(' · ')}
+                      . Объёмы воды, газа и электричества можно сверить со строками в квитанции «Мой
+                      дом».
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              <div className="receipts_toolbar">
+                <div className="receipts_filter_tabs">
+                  <button
+                    className={'tab_pill ' + (receiptFilter === 'all' ? 'active' : '')}
+                    onClick={() => setReceiptFilter('all')}
+                  >
+                    Все ({monthlyReceipts.length})
+                  </button>
+                  <button
+                    className={'tab_pill ' + (receiptFilter === 'unpaid' ? 'active' : '')}
+                    onClick={() => setReceiptFilter('unpaid')}
+                  >
+                    Ожидают оплаты (
+                    {
+                      monthlyReceipts.filter((r) => r.status === 'unpaid' || r.status === 'partial')
+                        .length
+                    }
+                    )
+                  </button>
+                  <button
+                    className={'tab_pill ' + (receiptFilter === 'paid' ? 'active' : '')}
+                    onClick={() => setReceiptFilter('paid')}
+                  >
+                    Оплаченные ({monthlyReceipts.filter((r) => r.status === 'paid').length})
+                  </button>
+                </div>
+
+                <div className="receipts_toolbar_actions">
+                  <button className="secondary_button" onClick={() => setEditingReceipt('new')}>
+                    <Sparkles size={15} /> Шаблон «Мой дом»
+                  </button>
+                  <button className="primary_button" onClick={() => setEditingReceipt('new')}>
+                    <Plus size={16} /> Добавить квитанцию
+                  </button>
+                </div>
+              </div>
+
+              {filteredReceipts.length === 0 ? (
+                <div className="empty_receipts_state">
+                  <div className="empty_icon_box">
+                    <ReceiptIcon size={36} />
+                  </div>
+                  <h3>В архиве пока нет квитанций за {monthLabel(period)}</h3>
+                  <p>
+                    Сохраняйте единые квитанции из сервиса «Мой дом», счета ТСЖ и квитанции
+                    коммунальных служб. Вы сможете отслеживать историю начислений, контролировать
+                    оплату и прикреплять сканы или PDF.
+                  </p>
+                  <div className="empty_actions">
+                    <button className="primary_button" onClick={() => setEditingReceipt('new')}>
+                      <Sparkles size={16} /> Создать квитанцию «Мой дом»
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="receipts_grid">
+                  {filteredReceipts.map((r) => {
+                    const cat = receiptCategories[r.category] || receiptCategories.other;
+                    return (
+                      <article className="receipt_card" key={r.id}>
+                        <div className="receipt_card_header">
+                          <span
+                            className="receipt_category_badge"
+                            style={{ backgroundColor: cat.color + '16', color: cat.color }}
+                          >
+                            {cat.badge}
+                          </span>
+                          <span className={'receipt_status_pill ' + r.status}>
+                            {r.status === 'paid'
+                              ? 'Оплачено'
+                              : r.status === 'partial'
+                                ? 'Частично'
+                                : 'Ожидает оплаты'}
+                          </span>
+                        </div>
+
+                        <div className="receipt_card_body">
+                          <h3 onClick={() => setViewingReceipt(r)}>{r.title}</h3>
+                          {r.account && (
+                            <p className="receipt_card_account">
+                              Лицевой счёт: <strong>{r.account}</strong>
+                            </p>
+                          )}
+                          <div className="receipt_card_sum">
+                            <strong>{r.amount}</strong>
+                            <span> сом</span>
+                          </div>
+                          {r.dueDate && (
+                            <p className="receipt_card_due">
+                              <CalendarDays size={13} /> Срок оплаты: до {r.dueDate}
+                            </p>
+                          )}
+
+                          {r.fileName && (
+                            <div
+                              className="receipt_attached_tag"
+                              onClick={() => setViewingReceipt(r)}
+                              title="Нажмите для просмотра"
+                            >
+                              <FileText size={14} />
+                              <span>{r.fileName}</span>
+                            </div>
+                          )}
+
+                          {r.items && r.items.length > 0 && (
+                            <div className="receipt_items_teaser">
+                              <div className="teaser_header">
+                                <small>Статьи начислений ({r.items.length}):</small>
+                              </div>
+                              <ul className="teaser_list">
+                                {r.items.slice(0, 3).map((it, idx) => (
+                                  <li key={it.id || idx}>
+                                    <span>{it.name}</span>
+                                    <strong>{it.amount} с.</strong>
+                                  </li>
+                                ))}
+                                {r.items.length > 3 && (
+                                  <li className="teaser_more">
+                                    <button
+                                      type="button"
+                                      className="text_button"
+                                      onClick={() => setViewingReceipt(r)}
+                                    >
+                                      + ещё {r.items.length - 3} стать(и/ей)...
+                                    </button>
+                                  </li>
+                                )}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="receipt_card_footer">
+                          <button
+                            type="button"
+                            className={
+                              'status_toggle_btn ' + (r.status === 'paid' ? 'is_paid' : 'is_unpaid')
+                            }
+                            onClick={() => toggleReceiptPaid(r)}
+                          >
+                            <Check size={14} />
+                            {r.status === 'paid' ? 'Оплачено' : 'Отметить оплаченным'}
+                          </button>
+                          <div className="receipt_card_actions">
+                            <button
+                              type="button"
+                              className="icon_button"
+                              title="Подробнее и просмотр"
+                              onClick={() => setViewingReceipt(r)}
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon_button"
+                              title="Редактировать"
+                              onClick={() => setEditingReceipt(r)}
+                            >
+                              <Settings2 size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon_button danger_icon"
+                              title="Удалить"
+                              onClick={() => deleteReceipt(r.id)}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          )}
           {view === 'connections' && (
             <section className="connections">
               <div className="connections_intro">
@@ -1224,6 +2200,40 @@ export default function Dashboard({
                   </article>
                 );
               })}
+              <article className="connection_card mydom_special">
+                <span className="provider_icon" style={{ background: '#ecfdf5', color: '#10b981' }}>
+                  <Building2 size={24} />
+                </span>
+                <div>
+                  <div className="connection_title">
+                    <h2>Мой дом (mydom.kg)</h2>
+                    <span className="status_pill available">Единая квитанция</span>
+                  </div>
+                  <p>
+                    Цифровая платформа ЖКХ Бишкека. Объединяет счета ТСЖ, вывоз мусора «Тазалык»,
+                    лифт, воду, тепло и свет в одну квитанцию с QR-кодом для оплаты через MBANK,
+                    MegaPay и Элдик.
+                  </p>
+                  <small>
+                    Лицевой счёт «Мой дом» позволяет вести единый учёт всех начислений по вашей
+                    квартире.
+                  </small>
+                  <div className="connection_links">
+                    <a href="https://mydom.kg" target="_blank" rel="noreferrer">
+                      Официальный сайт mydom.kg <ArrowUpRight size={14} />
+                    </a>
+                  </div>
+                </div>
+                <button
+                  className="secondary_button"
+                  onClick={() => {
+                    setView('receipts');
+                    setEditingReceipt('new');
+                  }}
+                >
+                  <Plus size={16} /> Квитанция Мой дом
+                </button>
+              </article>
               <div className="inline_note">
                 <ShieldCheck size={20} />
                 <span>
@@ -1460,6 +2470,29 @@ export default function Dashboard({
             <p className="field_hint">Архивные показания сохраняются только для вашего учёта.</p>
           )}
         </Modal>
+      )}
+      {editingReceipt && (
+        <ReceiptModal
+          existing={editingReceipt === 'new' ? null : editingReceipt}
+          defaultPeriod={period}
+          onSave={saveReceipt}
+          onClose={() => setEditingReceipt(null)}
+        />
+      )}
+      {viewingReceipt && (
+        <ReceiptViewModal
+          receipt={viewingReceipt}
+          onEdit={() => {
+            const target = viewingReceipt;
+            setViewingReceipt(null);
+            setEditingReceipt(target);
+          }}
+          onDelete={async () => {
+            await deleteReceipt(viewingReceipt.id);
+            setViewingReceipt(null);
+          }}
+          onClose={() => setViewingReceipt(null)}
+        />
       )}
       {notice && (
         <div className="toast" role="status">

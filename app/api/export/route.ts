@@ -1,14 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { getDb } from '@/db';
-import { accounts, readings } from '@/db/schema';
+import { accounts, readings, receipts } from '@/db/schema';
 import { failure, identity } from '@/lib/api';
 export async function GET(request: Request) {
   try {
     const owner = identity(request),
       db = getDb();
-    const [a, r] = await Promise.all([
+    const [a, r, rec] = await Promise.all([
       db.select().from(accounts).where(eq(accounts.owner, owner)),
       db.select().from(readings).where(eq(readings.owner, owner)),
+      db.select().from(receipts).where(eq(receipts.owner, owner)),
     ]);
     return new Response(
       JSON.stringify(
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
           exportedAt: new Date().toISOString(),
           accounts: a.map(({ owner: _o, ...v }) => ({ ...v, meters: JSON.parse(v.meters) })),
           readings: r.map(({ owner: _o, ...v }) => ({ ...v, values: JSON.parse(v.values) })),
+          receipts: rec.map(({ owner: _o, ...v }) => ({ ...v, items: JSON.parse(v.items) })),
         },
         null,
         2,

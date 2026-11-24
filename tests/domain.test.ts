@@ -7,6 +7,7 @@ import {
   bishkekPeriod,
   validatePeriod,
   toMilli,
+  validateReceipt,
   type Account,
 } from '../lib/domain.ts';
 const water: Account = {
@@ -73,4 +74,49 @@ test('rejects invalid and future month', () => {
   assert.throws(() => validatePeriod('2026-13', now));
   assert.throws(() => validatePeriod('2026-11', now));
   assert.equal(validatePeriod('2026-10', now), '2026-10');
+});
+test('receipt validation normalizes money, auto-calculates status and preserves items', () => {
+  const r = {
+    id: 'rec_1',
+    period: '2026-10',
+    category: 'mydom',
+    title: 'Единая квитанция · Мой дом',
+    account: '3180429',
+    amount: ' 2985,60 ',
+    paidAmount: '2985.60',
+    status: 'unpaid',
+    dueDate: '2026-11-25',
+    paidDate: '2026-11-20',
+    items: [
+      {
+        id: '1',
+        name: 'Техническое обслуживание',
+        amount: '1625',
+        unit: 'м²',
+        volume: '65',
+        tariff: '25',
+      },
+      { id: '2', name: 'Лифт', amount: '220.00' },
+    ],
+    fileName: 'bill.pdf',
+    fileData: 'data:application/pdf;base64,JVBERi0xLjcK',
+    notes: 'Оплачено через MBANK',
+  };
+  const validated = validateReceipt(r);
+  assert.equal(validated.id, 'rec_1');
+  assert.equal(validated.category, 'mydom');
+  assert.equal(validated.amount, '2985.60');
+  assert.equal(validated.paidAmount, '2985.60');
+  assert.equal(validated.status, 'paid'); // auto-updated to paid because paidAmount >= amount
+  assert.equal(validated.items.length, 2);
+  assert.equal(validated.items[0].amount, '1625.00');
+
+  // Test partial status
+  const partial = validateReceipt({ ...r, paidAmount: '1000' });
+  assert.equal(partial.status, 'partial');
+
+  // Test invalid amount
+  assert.throws(() => validateReceipt({ ...r, amount: '-10' }));
+  assert.throws(() => validateReceipt({ ...r, amount: 'abc' }));
+  assert.throws(() => validateReceipt({ ...r, category: 'unknown_cat' }));
 });

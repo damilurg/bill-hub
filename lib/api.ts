@@ -16,8 +16,8 @@ export function identity(request: Request, mutate = false): string {
   if (mutate) sameOrigin(request);
   return owner;
 }
-export async function readJson(request: Request) {
-  if (Number(request.headers.get('content-length')) > 20000)
+export async function readJson(request: Request, limit = 20000) {
+  if (Number(request.headers.get('content-length')) > limit)
     throw new ValidationError('Слишком большой запрос.');
   const reader = request.body?.getReader();
   if (!reader) throw new ValidationError('Ожидается JSON.');
@@ -28,7 +28,7 @@ export async function readJson(request: Request) {
       const { done, value } = await reader.read();
       if (done) break;
       length += value.byteLength;
-      if (length > 20000) {
+      if (length > limit) {
         await reader.cancel();
         throw new ValidationError('Слишком большой запрос.');
       }
